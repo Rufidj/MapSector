@@ -33,6 +33,10 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         EditorScene.cpp
         VertexItem.h
         VertexItem.cpp
+        WallDialog.h
+        WallDialog.cpp
+        ZoomableGraphicsView.h
+        ZoomableGraphicsView.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET MapSector APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR

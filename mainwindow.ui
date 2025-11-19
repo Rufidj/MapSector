@@ -17,7 +17,7 @@
    <widget class="QSplitter" name="splitter">
     <property name="geometry">
      <rect>
-      <x>190</x>
+      <x>220</x>
       <y>0</y>
       <width>1121</width>
       <height>761</height>
@@ -104,16 +104,16 @@
        <rect>
         <x>20</x>
         <y>150</y>
-        <width>141</width>
-        <height>111</height>
+        <width>321</width>
+        <height>61</height>
        </rect>
       </property>
      </widget>
      <widget class="QLabel" name="label_2">
       <property name="geometry">
        <rect>
-        <x>20</x>
-        <y>270</y>
+        <x>10</x>
+        <y>220</y>
         <width>101</width>
         <height>20</height>
        </rect>
@@ -125,28 +125,40 @@
      <widget class="QDoubleSpinBox" name="floorHeightSpin">
       <property name="geometry">
        <rect>
-        <x>20</x>
-        <y>290</y>
+        <x>10</x>
+        <y>240</y>
         <width>62</width>
         <height>23</height>
        </rect>
+      </property>
+      <property name="minimum">
+       <double>-100000.000000000000000</double>
+      </property>
+      <property name="maximum">
+       <double>100000.000000000000000</double>
       </property>
      </widget>
      <widget class="QDoubleSpinBox" name="ceilingHeightSpin">
       <property name="geometry">
        <rect>
-        <x>20</x>
-        <y>340</y>
+        <x>10</x>
+        <y>290</y>
         <width>62</width>
         <height>23</height>
        </rect>
+      </property>
+      <property name="minimum">
+       <double>-100000.000000000000000</double>
+      </property>
+      <property name="maximum">
+       <double>100000.000000000000000</double>
       </property>
      </widget>
      <widget class="QLabel" name="label_3">
       <property name="geometry">
        <rect>
-        <x>20</x>
-        <y>320</y>
+        <x>10</x>
+        <y>270</y>
         <width>101</width>
         <height>16</height>
        </rect>
@@ -158,8 +170,8 @@
      <widget class="QLabel" name="label_4">
       <property name="geometry">
        <rect>
-        <x>20</x>
-        <y>370</y>
+        <x>10</x>
+        <y>320</y>
         <width>58</width>
         <height>15</height>
        </rect>
@@ -171,10 +183,10 @@
      <widget class="QListWidget" name="textureList">
       <property name="geometry">
        <rect>
-        <x>20</x>
-        <y>390</y>
-        <width>151</width>
-        <height>192</height>
+        <x>10</x>
+        <y>340</y>
+        <width>341</width>
+        <height>121</height>
        </rect>
       </property>
      </widget>
@@ -202,6 +214,88 @@
       </property>
       <property name="text">
        <string>Eliminar sector</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_5">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>470</y>
+        <width>111</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Textura de suelo :</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_6">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>500</y>
+        <width>111</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Textura de techo :</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_7">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>530</y>
+        <width>111</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Textura de pared :</string>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="floorTextureCombo">
+      <property name="geometry">
+       <rect>
+        <x>130</x>
+        <y>470</y>
+        <width>79</width>
+        <height>23</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="ceilingTextureCombo">
+      <property name="geometry">
+       <rect>
+        <x>130</x>
+        <y>500</y>
+        <width>79</width>
+        <height>23</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="wallTextureCombo">
+      <property name="geometry">
+       <rect>
+        <x>130</x>
+        <y>530</y>
+        <width>79</width>
+        <height>23</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="importButton">
+      <property name="geometry">
+       <rect>
+        <x>110</x>
+        <y>100</y>
+        <width>91</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Importar mapa</string>
       </property>
      </widget>
     </widget>

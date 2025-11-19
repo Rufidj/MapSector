@@ -4,25 +4,29 @@
 
 #include <QGraphicsPolygonItem>
 #include <QGraphicsSceneMouseEvent>
+#include <QObject>
 #include "MapStructures.h"
 
-class EditorSectorItem : public QGraphicsPolygonItem
+class EditorSectorItem : public QObject, public QGraphicsPolygonItem
 {
+    Q_OBJECT
+
 public:
-    EditorSectorItem(const EditorSector &sector, QGraphicsItem *parent = nullptr);
+    EditorSectorItem(int sectorIndex, const EditorSector &sector, QGraphicsItem *parent = nullptr);
 
     EditorSector getSector() const { return sector; }
     void updateFromSector(const EditorSector &newSector);
+    int getSectorIndex() const { return sectorIdx; }
+
+signals:
+    void sectorMoved(int sectorIndex, QPointF delta);
 
 protected:
-    void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
-    void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
-    void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
+    QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
 
 private:
     EditorSector sector;
-    bool dragging;
-    QPointF dragStartPos;
+    int sectorIdx;
 };
 
 #endif

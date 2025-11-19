@@ -3,8 +3,8 @@
 #include <QPen>
 #include <QBrush>
 
-EditorSectorItem::EditorSectorItem(const EditorSector &s, QGraphicsItem *parent)
-    : QGraphicsPolygonItem(parent), sector(s), dragging(false)
+EditorSectorItem::EditorSectorItem(int sectorIndex, const EditorSector &s, QGraphicsItem *parent)
+    : QObject(), QGraphicsPolygonItem(parent), sector(s), sectorIdx(sectorIndex)
 {
     QPolygonF polygon;
     for (const QPointF &vertex : sector.vertices) {
@@ -14,43 +14,34 @@ EditorSectorItem::EditorSectorItem(const EditorSector &s, QGraphicsItem *parent)
     setPen(QPen(Qt::blue, 2));
     setBrush(QBrush(QColor(100, 100, 255, 50)));
 
-    // Hacer el item seleccionable y movible
     setFlag(QGraphicsItem::ItemIsSelectable);
     setFlag(QGraphicsItem::ItemIsMovable);
+    setFlag(QGraphicsItem::ItemSendsGeometryChanges);
 }
 
-void EditorSectorItem::mousePressEvent(QGraphicsSceneMouseEvent *event) {
-    if (event->button() == Qt::LeftButton) {
-        dragging = true;
-        dragStartPos = event->scenePos();
-    }
-    QGraphicsPolygonItem::mousePressEvent(event);
-}
+QVariant EditorSectorItem::itemChange(GraphicsItemChange change, const QVariant &value) {
+    if (change == ItemPositionHasChanged) {
+        // Actualizar vértices del sector basándose en la nueva posición del item
+        QPointF newPos = value.toPointF();
+        QPointF delta = newPos;
 
-void EditorSectorItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
-    if (dragging) {
-        QPointF delta = event->scenePos() - dragStartPos;
-
-        // Actualizar vértices del sector
-        for (QPointF &vertex : sector.vertices) {
-            vertex += delta;
+        // Recalcular vértices en coordenadas de escena
+        QPolygonF polygon = this->polygon();
+        sector.vertices.clear();
+        for (const QPointF &point : polygon) {
+            sector.vertices.append(mapToScene(point));
         }
 
-        // Actualizar polígono visual
-        QPolygonF polygon;
-        for (const QPointF &vertex : sector.vertices) {
-            polygon << vertex;
-        }
-        setPolygon(polygon);
-
-        dragStartPos = event->scenePos();
+        emit sectorMoved(sectorIdx, delta);
     }
-    QGraphicsPolygonItem::mouseMoveEvent(event);
+    return QGraphicsPolygonItem::itemChange(change, value);
 }
 
-void EditorSectorItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event) {
-    if (event->button() == Qt::LeftButton) {
-        dragging = false;
+void EditorSectorItem::updateFromSector(const EditorSector &newSector) {
+    sector = newSector;
+    QPolygonF polygon;
+    for (const QPointF &vertex : sector.vertices) {
+        polygon << vertex;
     }
-    QGraphicsPolygonItem::mouseReleaseEvent(event);
+    setPolygon(polygon);
 }
