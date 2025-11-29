@@ -93,16 +93,12 @@ void MainWindow::on_addWallButton_clicked() {
 }
 
 void MainWindow::on_addTextureButton_clicked() {
-    QStringList filenames = QFileDialog::getOpenFileNames(this,
-                                                          "Seleccionar Texturas", "", "Images (*.png *.jpg *.bmp)");
+    QString filename = QFileDialog::getOpenFileName(this,
+                                                    "Seleccionar archivo .tex", "", "TEX Files (*.tex)");
 
-    if (!filenames.isEmpty()) {
-        for (const QString &filename : filenames) {
-            TextureEntry tex(filename, textures.size());
-            textures.append(tex);
-        }
+    if (!filename.isEmpty()) {
+        loadTEXFile(filename);
         updateTextureList();
-        updateTextureComboBoxes();  // Si ya implementaste los comboboxes
     }
 }
 
@@ -126,32 +122,41 @@ void MainWindow::updateSectorList() {
 }
 
 void MainWindow::updateTextureList() {
-    ui->textureList->clear();
-    ui->textureList->setIconSize(QSize(64, 64)); // Tamaño de thumbnails
-    ui->textureList->setViewMode(QListWidget::IconMode); // Modo de iconos
-    ui->textureList->setResizeMode(QListWidget::Adjust);
-    ui->textureList->setSpacing(10);
+    // Limpiar thumbnails existentes
+    ui->wallTextureThumb->clear();
+    ui->ceilingTextureThumb->clear();
+    ui->floorTextureThumb->clear();
 
-    for (const TextureEntry &tex : textures) {
-        // Cargar imagen y crear thumbnail
-        QPixmap pixmap(tex.filename);
-        if (!pixmap.isNull()) {
-            // Escalar manteniendo aspecto
-            QPixmap thumbnail = pixmap.scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    if (textures.isEmpty()) {
+        ui->texFileLabel->setText("Ningún archivo .tex cargado");
+        updateTextureComboBoxes();
+        return;
+    }
 
-            // Crear item con icono
-            QString displayName = QString("%1: %2").arg(tex.id).arg(QFileInfo(tex.filename).fileName());
-            QListWidgetItem *item = new QListWidgetItem(QIcon(thumbnail), displayName);
-            item->setData(Qt::UserRole, tex.id); // Guardar ID para referencia
-            ui->textureList->addItem(item);
-        } else {
-            // Si falla la carga, mostrar sin icono
-            QString displayName = QString("%1: %2 (error)").arg(tex.id).arg(QFileInfo(tex.filename).fileName());
-            QListWidgetItem *item = new QListWidgetItem(displayName);
-            item->setData(Qt::UserRole, tex.id);
-            ui->textureList->addItem(item);
+    // Mostrar primeras 3 texturas como thumbnails
+    int thumbCount = qMin(3, textures.size());
+
+    for (int i = 0; i < thumbCount; i++) {
+        if (!textures[i].pixmap.isNull()) {
+            QPixmap thumbnail = textures[i].pixmap.scaled(48, 48,
+                                                          Qt::KeepAspectRatio, Qt::SmoothTransformation);
+
+            switch (i) {
+            case 0:
+                ui->wallTextureThumb->setPixmap(thumbnail);
+                break;
+            case 1:
+                ui->ceilingTextureThumb->setPixmap(thumbnail);
+                break;
+            case 2:
+                ui->floorTextureThumb->setPixmap(thumbnail);
+                break;
+            }
         }
     }
+
+    ui->texFileLabel->setText(QString("Archivo .tex: %1 texturas").arg(textures.size()));
+    updateTextureComboBoxes();
 }
 
 void MainWindow::drawSector(const EditorSector &sector) {
@@ -725,6 +730,120 @@ void MainWindow::on_importButton_clicked() {
     }
 }
 
+bool MainWindow::loadTEXFile(const QString &filename) {
+    QFile file(filename);
+    if (!file.open(QIODevice::ReadOnly)) {
+        QMessageBox::critical(this, "Error", "No se pudo abrir el archivo .tex");
+        return false;
+    }
+
+    QDataStream in(&file);
+    in.setByteOrder(QDataStream::LittleEndian);
+
+    // Leer cabecera TEX_HEADER
+    TEX_HEADER header;
+    in.readRawData(reinterpret_cast<char*>(header.magic), 4);
+    in >> header.version >> header.num_images;
+    in.readRawData(reinterpret_cast<char*>(header.reserved), 6);
+
+    // Validar magic number
+    if (strncmp(header.magic, "TEX", 3) != 0) {
+        QMessageBox::critical(this, "Error", "Formato .tex inválido");
+        return false;
+    }
+
+    // Validar número de imágenes
+    if (header.num_images == 0 || header.num_images > 1000) {
+        QMessageBox::critical(this, "Error", "Número de imágenes inválido");
+        return false;
+    }
+
+    // Limpiar texturas existentes
+    textures.clear();
+
+    // Leer cada entrada TEX_ENTRY y cargar datos RGB
+    for (uint16_t i = 0; i < header.num_images; i++) {
+        TEX_ENTRY entry;
+        in >> entry.index >> entry.width >> entry.height >> entry.format;
+        in.readRawData(reinterpret_cast<char*>(entry.reserved), 250);
+
+        // Validar dimensiones
+        if (entry.width == 0 || entry.height == 0 ||
+            entry.width > 4096 || entry.height > 4096) {
+            qWarning() << "Dimensiones inválidas para textura" << entry.index;
+            continue;
+        }
+
+        // Calcular tamaño según formato
+        int dataSize;
+        QImage::Format format;
+
+        switch (entry.format) {
+        case 0: // RGB
+            dataSize = entry.width * entry.height * 3;
+            format = QImage::Format_RGB888;
+            break;
+        case 1: // RGBA
+            dataSize = entry.width * entry.height * 4;
+            format = QImage::Format_RGBA8888;
+            break;
+        default:
+            qWarning() << "Formato no soportado:" << entry.format;
+            continue;
+        }
+
+        // Validar tamaño de datos
+        if (dataSize <= 0 || dataSize > 16*1024*1024) { // Max 16MB por textura
+            qWarning() << "Tamaño de datos inválido:" << dataSize;
+            continue;
+        }
+
+        // Verificar que quedan suficientes bytes en el archivo
+        qint64 remaining = file.size() - file.pos();
+        if (remaining < dataSize) {
+            qWarning() << "Archivo truncado, faltan" << dataSize - remaining << "bytes";
+            break;
+        }
+
+        // Leer datos de imagen usando buffer temporal
+        char* rgbBuffer = new char[dataSize];
+        qint64 bytesRead = in.readRawData(rgbBuffer, dataSize);
+
+        if (bytesRead != dataSize) {
+            delete[] rgbBuffer;
+            qWarning() << "Error: no se pudieron leer todos los bytes de la imagen";
+            continue;
+        }
+
+        // Crear QImage desde el buffer
+        QImage image(reinterpret_cast<const uchar*>(rgbBuffer),
+                     entry.width, entry.height, format);
+
+        if (image.isNull()) {
+            delete[] rgbBuffer;
+            qWarning() << "Error al crear QImage para textura" << entry.index;
+            continue;
+        }
+
+        // Crear QPixmap y añadir a la lista
+        QPixmap pixmap = QPixmap::fromImage(image);
+        TextureEntry tex(filename, entry.index);
+        tex.pixmap = pixmap;
+        textures.append(tex);
+
+        delete[] rgbBuffer;  // Liberar memoria
+    }
+
+    file.close();
+
+    // Actualizar UI
+    updateTextureList();
+
+    QMessageBox::information(this, "Éxito",
+                             QString("Cargadas %1 texturas de %2").arg(textures.size()).arg(header.num_images));
+
+    return true;
+}
 
 MainWindow::~MainWindow()
 {

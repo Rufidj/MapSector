@@ -5,6 +5,7 @@
 #include <QPointF>
 #include <QString>
 #include <cstdint>
+#include <QPixmap>
 
 // Estructura para un sector en el editor
 struct EditorSector {
@@ -34,9 +35,25 @@ struct EditorWall {
 struct TextureEntry {
     QString filename;
     uint32_t id;
+    QPixmap pixmap;
 
     TextureEntry() : id(0) {}
     TextureEntry(const QString &fname, uint32_t tid) : filename(fname), id(tid) {}
 };
 
+// Estructuras para formato .tex
+typedef struct {
+    char magic[4];
+    uint32_t version;
+    uint16_t num_images;
+    uint8_t reserved[6];
+} TEX_HEADER;
+
+typedef struct {
+    uint16_t index;
+    uint16_t width;
+    uint16_t height;
+    uint16_t format;
+    uint8_t reserved[250];
+} TEX_ENTRY;
 #endif // MAPSTRUCTURES_H

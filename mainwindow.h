@@ -67,6 +67,7 @@ private:
     void drawWall(const EditorWall &wall);
     bool exportToDMAP(const QString &filename);
     bool importFromDMAP(const QString &filename);
+    bool loadTEXFile(const QString &filename);
 };
 
 #endif // MAINWINDOW_H
