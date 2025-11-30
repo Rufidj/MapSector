@@ -1,631 +1,544 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<ui version="4.0">
- <class>MainWindow</class>
- <widget class="QMainWindow" name="MainWindow">
-  <property name="geometry">
-   <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>1685</width>
-    <height>897</height>
-   </rect>
-  </property>
-  <property name="windowTitle">
-   <string>MapSector Editor - divmap3d style</string>
-  </property>
-  <widget class="QWidget" name="centralwidget">
-   <widget class="QSplitter" name="splitter">
-    <property name="geometry">
-     <rect>
-      <x>0</x>
-      <y>0</y>
-      <width>2200</width>
-      <height>761</height>
-     </rect>
-    </property>
-    <property name="orientation">
-     <enum>Qt::Orientation::Horizontal</enum>
-    </property>
-    <widget class="QGraphicsView" name="mapView"/>
-    <widget class="QWidget" name="widget" native="true">
-     <property name="minimumSize">
-      <size>
-       <width>1200</width>
-       <height>0</height>
-      </size>
-     </property>
-     <widget class="QGroupBox" name="editModeGroup">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>10</y>
-        <width>180</width>
-        <height>140</height>
-       </rect>
-      </property>
-      <property name="title">
-       <string>Modo de Edición</string>
-      </property>
-      <widget class="QRadioButton" name="editModeRadio">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>20</y>
-         <width>80</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Edición</string>
-       </property>
-       <property name="checked">
-        <bool>true</bool>
-       </property>
-      </widget>
-      <widget class="QRadioButton" name="vertexModeRadio">
-       <property name="geometry">
-        <rect>
-         <x>90</x>
-         <y>20</y>
-         <width>80</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Vértice</string>
-       </property>
-      </widget>
-      <widget class="QRadioButton" name="lineModeRadio">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>45</y>
-         <width>80</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Línea</string>
-       </property>
-      </widget>
-      <widget class="QRadioButton" name="sectorModeRadio">
-       <property name="geometry">
-        <rect>
-         <x>90</x>
-         <y>45</y>
-         <width>80</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Sector</string>
-       </property>
-      </widget>
-      <widget class="QRadioButton" name="flagModeRadio">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>70</y>
-         <width>80</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Bandera</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="addSectorButton">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>100</y>
-         <width>80</width>
-         <height>23</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Añadir sector</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="addWallButton">
-       <property name="geometry">
-        <rect>
-         <x>95</x>
-         <y>100</y>
-         <width>80</width>
-         <height>23</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Añadir pared</string>
-       </property>
-      </widget>
+<?xml version="1.0" encoding="UTF-8"?>  
+<ui version="4.0">  
+ <class>MainWindow</class>  
+ <widget class="QMainWindow" name="MainWindow">  
+  <property name="geometry">  
+   <rect>  
+    <x>0</x>  
+    <y>0</y>  
+    <width>1685</width>  
+    <height>897</height>  
+   </rect>  
+  </property>  
+  <property name="windowTitle">  
+   <string>MapSector Editor - divmap3d style</string>  
+  </property>  
+  <widget class="QWidget" name="centralwidget">  
+   <widget class="QSplitter" name="splitter">  
+    <property name="geometry">  
+     <rect>  
+      <x>0</x>  
+      <y>0</y>  
+      <width>2200</width>  
+      <height>761</height>  
+     </rect>  
+    </property>  
+    <property name="orientation">  
+     <enum>Qt::Orientation::Horizontal</enum>  
+    </property>  
+    <widget class="QGraphicsView" name="mapView"/>  
+    <widget class="QWidget" name="widget" native="true">  
+     <property name="minimumSize">  
+      <size>  
+       <width>1200</width>  
+       <height>0</height>  
+      </size>  
+     </property>  
+     <widget class="QGroupBox" name="editModeGroup">  
+      <property name="geometry">  
+       <rect>  
+        <x>10</x>  
+        <y>10</y>  
+        <width>180</width>  
+        <height>140</height>  
+       </rect>  
+      </property>  
+      <property name="title">  
+       <string>Modo de Edición</string>  
+      </property>  
+      <widget class="QRadioButton" name="editModeRadio">  
+       <property name="geometry">  
+        <rect>  
+         <x>10</x>  
+         <y>20</y>  
+         <width>80</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Edición</string>  
+       </property>  
+       <property name="checked">  
+        <bool>true</bool>  
+       </property>  
+      </widget>  
+      <widget class="QRadioButton" name="vertexModeRadio">  
+       <property name="geometry">  
+        <rect>  
+         <x>90</x>  
+         <y>20</y>  
+         <width>80</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Vértice</string>  
+       </property>  
+      </widget>  
+      <widget class="QRadioButton" name="lineModeRadio">  
+       <property name="geometry">  
+        <rect>  
+         <x>10</x>  
+         <y>45</y>  
+         <width>80</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Línea</string>  
+       </property>  
+      </widget>  
+      <widget class="QRadioButton" name="sectorModeRadio">  
+       <property name="geometry">  
+        <rect>  
+         <x>90</x>  
+         <y>45</y>  
+         <width>80</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Sector</string>  
+       </property>  
+      </widget>  
+      <widget class="QRadioButton" name="flagModeRadio">  
+       <property name="geometry">  
+        <rect>  
+         <x>10</x>  
+         <y>70</y>  
+         <width>80</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Bandera</string>  
+       </property>  
+      </widget>  
+      <widget class="QPushButton" name="addSectorButton">  
+       <property name="geometry">  
+        <rect>  
+         <x>10</x>  
+         <y>100</y>  
+         <width>80</width>  
+         <height>23</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Añadir sector</string>  
+       </property>  
+      </widget>  
+      <widget class="QPushButton" name="addWallButton">  
+       <property name="geometry">  
+        <rect>  
+         <x>95</x>  
+         <y>100</y>  
+         <width>80</width>  
+         <height>23</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Añadir pared</string>  
+       </property>  
+      </widget>  
+     </widget>  
+     <widget class="QGroupBox" name="heightGroup">  
+      <property name="geometry">  
+       <rect>  
+        <x>10</x>  
+        <y>160</y>  
+        <width>180</width>  
+        <height>80</height>  
+       </rect>  
+      </property>  
+      <property name="title">  
+       <string>Alturas</string>  
+      </property>  
+      <widget class="QLabel" name="ceilingLabel">  
+       <property name="geometry">  
+        <rect>  
+         <x>10</x>  
+         <y>20</y>  
+         <width>70</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Techo:</string>  
+       </property>  
+      </widget>  
+      <widget class="QSpinBox" name="ceilingHeightSpin">  
+       <property name="geometry">  
+        <rect>  
+         <x>85</x>  
+         <y>20</y>  
+         <width>80</width>  
+         <height>23</height>  
+        </rect>  
+       </property>  
+       <property name="minimum">  
+        <number>-4095</number>  
+       </property>  
+       <property name="maximum">  
+        <number>4095</number>  
+       </property>  
+      </widget>  
+      <widget class="QLabel" name="floorLabel">  
+       <property name="geometry">  
+        <rect>  
+         <x>10</x>  
+         <y>50</y>  
+         <width>70</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Suelo:</string>  
+       </property>  
+      </widget>  
+      <widget class="QSpinBox" name="floorHeightSpin">  
+       <property name="geometry">  
+        <rect>  
+         <x>85</x>  
+         <y>50</y>  
+         <width>80</width>  
+         <height>23</height>  
+        </rect>  
+       </property>  
+       <property name="minimum">  
+        <number>-4095</number>  
+       </property>  
+       <property name="maximum">  
+        <number>4095</number>  
+       </property>  
+      </widget>  
+     </widget>  
+     <widget class="QGroupBox" name="gridGroup">  
+      <property name="geometry">  
+       <rect>  
+        <x>10</x>  
+        <y>250</y>  
+        <width>180</width>  
+        <height>60</height>  
+       </rect>  
+      </property>  
+      <property name="title">  
+       <string>Grid</string>  
+      </property>  
+      <widget class="QCheckBox" name="gridCheck">  
+       <property name="geometry">  
+        <rect>  
+         <x>10</x>  
+         <y>25</y>  
+         <width>70</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Grid</string>  
+       </property>  
+       <property name="checked">  
+        <bool>true</bool>  
+       </property>  
+      </widget>  
+      <widget class="QCheckBox" name="snapCheck">  
+       <property name="geometry">  
+        <rect>  
+         <x>90</x>  
+         <y>25</y>  
+         <width>70</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Snap</string>  
+       </property>  
+      </widget>  
+     </widget>  
+     <widget class="QGroupBox" name="textureGroup">  
+      <property name="geometry">  
+       <rect>  
+        <x>200</x>  
+        <y>10</y>  
+        <width>180</width>  
+        <height>220</height>  
+       </rect>  
+      </property>  
+      <property name="title">  
+       <string>Texturas .tex</string>  
+      </property>  
+      <widget class="QPushButton" name="addTextureButton">  
+       <property name="geometry">  
+        <rect>  
+         <x>10</x>  
+         <y>20</y>  
+         <width>160</width>  
+         <height>23</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Cargar archivo .tex</string>  
+       </property>  
+      </widget>  
+      <widget class="QLabel" name="wallTextureLabel">  
+       <property name="geometry">  
+        <rect>  
+         <x>10</x>  
+         <y>55</y>  
+         <width>60</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Pared:</string>  
+       </property>  
+      </widget>  
+      <widget class="QPushButton" name="wallTextureThumb">  
+       <property name="geometry">  
+        <rect>  
+         <x>70</x>  
+         <y>55</y>  
+         <width>48</width>  
+         <height>48</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string/>  
+       </property>  
+      </widget>  
+      <widget class="QLabel" name="ceilingTextureLabel">  
+       <property name="geometry">  
+        <rect>  
+         <x>10</x>  
+         <y>110</y>  
+         <width>60</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Techo:</string>  
+       </property>  
+      </widget>  
+      <widget class="QPushButton" name="ceilingTextureThumb">  
+       <property name="geometry">  
+        <rect>  
+         <x>70</x>  
+         <y>110</y>  
+         <width>48</width>  
+         <height>48</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string/>  
+       </property>  
+      </widget>  
+      <widget class="QLabel" name="floorTextureLabel">  
+       <property name="geometry">  
+        <rect>  
+         <x>10</x>  
+         <y>165</y>  
+         <width>60</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Suelo:</string>  
+       </property>  
+      </widget>  
+      <widget class="QPushButton" name="floorTextureThumb">  
+       <property name="geometry">  
+        <rect>  
+         <x>70</x>  
+         <y>165</y>  
+         <width>48</width>  
+         <height>48</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string/>  
+       </property>  
+      </widget>  
      </widget>
-     <widget class="QGroupBox" name="heightGroup">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>160</y>
-        <width>180</width>
-        <height>80</height>
-       </rect>
-      </property>
-      <property name="title">
-       <string>Alturas</string>
-      </property>
-      <widget class="QLabel" name="ceilingLabel">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>20</y>
-         <width>70</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Techo:</string>
-       </property>
-      </widget>
-      <widget class="QSpinBox" name="ceilingHeightSpin">
-       <property name="geometry">
-        <rect>
-         <x>85</x>
-         <y>20</y>
-         <width>80</width>
-         <height>23</height>
-        </rect>
-       </property>
-       <property name="minimum">
-        <number>-4095</number>
-       </property>
-       <property name="maximum">
-        <number>4095</number>
-       </property>
-      </widget>
-      <widget class="QLabel" name="floorLabel">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>50</y>
-         <width>70</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Suelo:</string>
-       </property>
-      </widget>
-      <widget class="QSpinBox" name="floorHeightSpin">
-       <property name="geometry">
-        <rect>
-         <x>85</x>
-         <y>50</y>
-         <width>80</width>
-         <height>23</height>
-        </rect>
-       </property>
-       <property name="minimum">
-        <number>-4095</number>
-       </property>
-       <property name="maximum">
-        <number>4095</number>
-       </property>
-      </widget>
-     </widget>
-     <widget class="QGroupBox" name="gridGroup">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>250</y>
-        <width>180</width>
-        <height>60</height>
-       </rect>
-      </property>
-      <property name="title">
-       <string>Grid</string>
-      </property>
-      <widget class="QCheckBox" name="gridCheck">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>25</y>
-         <width>70</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Grid</string>
-       </property>
-       <property name="checked">
-        <bool>true</bool>
-       </property>
-      </widget>
-      <widget class="QCheckBox" name="snapCheck">
-       <property name="geometry">
-        <rect>
-         <x>90</x>
-         <y>25</y>
-         <width>70</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Snap</string>
-       </property>
-      </widget>
-     </widget>
-     <widget class="QGroupBox" name="textureGroup">
-      <property name="geometry">
-       <rect>
-        <x>200</x>
-        <y>10</y>
-        <width>180</width>
-        <height>220</height>
-       </rect>
-      </property>
-      <property name="title">
-       <string>Texturas .tex</string>
-      </property>
-      <widget class="QPushButton" name="addTextureButton">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>20</y>
-         <width>160</width>
-         <height>23</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Cargar archivo .tex</string>
-       </property>
-      </widget>
-      <widget class="QLabel" name="wallTextureLabel">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>55</y>
-         <width>60</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Pared:</string>
-       </property>
-      </widget>
-      <widget class="QLabel" name="wallTextureThumb">
-       <property name="geometry">
-        <rect>
-         <x>70</x>
-         <y>55</y>
-         <width>48</width>
-         <height>48</height>
-        </rect>
-       </property>
-       <property name="frameShape">
-        <enum>QFrame::Shape::Box</enum>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-       <property name="scaledContents">
-        <bool>true</bool>
-       </property>
-      </widget>
-      <widget class="QLabel" name="ceilingTextureLabel">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>110</y>
-         <width>60</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Techo:</string>
-       </property>
-      </widget>
-      <widget class="QLabel" name="ceilingTextureThumb">
-       <property name="geometry">
-        <rect>
-         <x>70</x>
-         <y>110</y>
-         <width>48</width>
-         <height>48</height>
-        </rect>
-       </property>
-       <property name="frameShape">
-        <enum>QFrame::Shape::Box</enum>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-       <property name="scaledContents">
-        <bool>true</bool>
-       </property>
-      </widget>
-      <widget class="QLabel" name="floorTextureLabel">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>165</y>
-         <width>60</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Suelo:</string>
-       </property>
-      </widget>
-      <widget class="QLabel" name="floorTextureThumb">
-       <property name="geometry">
-        <rect>
-         <x>70</x>
-         <y>165</y>
-         <width>48</width>
-         <height>48</height>
-        </rect>
-       </property>
-       <property name="frameShape">
-        <enum>QFrame::Shape::Box</enum>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-       <property name="scaledContents">
-        <bool>true</bool>
-       </property>
-      </widget>
-     </widget>
-     <widget class="QGroupBox" name="infoGroup">
-      <property name="geometry">
-       <rect>
-        <x>200</x>
-        <y>240</y>
-        <width>180</width>
-        <height>120</height>
-       </rect>
-      </property>
-      <property name="title">
-       <string>Información</string>
-      </property>
-      <widget class="QLabel" name="coordXLabel">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>20</y>
-         <width>30</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>X:</string>
-       </property>
-      </widget>
-      <widget class="QLabel" name="coordXValue">
-       <property name="geometry">
-        <rect>
-         <x>40</x>
-         <y>20</y>
-         <width>60</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>0000</string>
-       </property>
-      </widget>
-      <widget class="QLabel" name="coordYLabel">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>40</y>
-         <width>30</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Y:</string>
-       </property>
-      </widget>
-      <widget class="QLabel" name="coordYValue">
-       <property name="geometry">
-        <rect>
-         <x>40</x>
-         <y>40</y>
-         <width>60</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>0000</string>
-       </property>
-      </widget>
-      <widget class="QLabel" name="texFileLabel">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>65</y>
-         <width>160</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Ningún archivo .tex</string>
-       </property>
-      </widget>
-      <widget class="QLabel" name="elementLabel">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>85</y>
-         <width>160</width>
-         <height>20</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Elemento: Ninguno</string>
-       </property>
-      </widget>
-     </widget>
-     <widget class="QLabel" name="label">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>370</y>
-        <width>71</width>
-        <height>16</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Sectores :</string>
-      </property>
-     </widget>
-     <widget class="QListWidget" name="sectorList">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>390</y>
-        <width>371</width>
-        <height>80</height>
-       </rect>
-      </property>
-     </widget>
-     <widget class="QPushButton" name="editVerticesButton">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>510</y>
-        <width>110</width>
-        <height>23</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Editar vertices</string>
-      </property>
-     </widget>
-     <widget class="QPushButton" name="deleteSectorButton">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>480</y>
-        <width>110</width>
-        <height>23</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Eliminar sector</string>
-      </property>
-     </widget>
-     <widget class="QPushButton" name="exportButton">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>540</y>
-        <width>110</width>
-        <height>23</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Exportar mapa</string>
-      </property>
-     </widget>
-     <widget class="QPushButton" name="importButton">
-      <property name="geometry">
-       <rect>
-        <x>125</x>
-        <y>4460</y>
-        <width>110</width>
-        <height>23</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Importar mapa</string>
-      </property>
-     </widget>
-     <widget class="QLabel" name="label_5">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>570</y>
-        <width>151</width>
-        <height>16</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Textura de suelo (índice):</string>
-      </property>
-     </widget>
-     <widget class="QComboBox" name="floorTextureCombo">
-      <property name="geometry">
-       <rect>
-        <x>160</x>
-        <y>570</y>
-        <width>100</width>
-        <height>23</height>
-       </rect>
-      </property>
-     </widget>
-     <widget class="QLabel" name="label_6">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>600</y>
-        <width>151</width>
-        <height>16</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Textura de techo (índice):</string>
-      </property>
-     </widget>
-     <widget class="QComboBox" name="ceilingTextureCombo">
-      <property name="geometry">
-       <rect>
-        <x>160</x>
-        <y>600</y>
-        <width>100</width>
-        <height>23</height>
-       </rect>
-      </property>
-     </widget>
-     <widget class="QLabel" name="label_7">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>630</y>
-        <width>151</width>
-        <height>16</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Textura de pared (índice):</string>
-      </property>
-     </widget>
-     <widget class="QComboBox" name="wallTextureCombo">
-      <property name="geometry">
-       <rect>
-        <x>160</x>
-        <y>630</y>
-        <width>100</width>
-        <height>23</height>
-       </rect>
-      </property>
-     </widget>
-    </widget>
-   </widget>
-  </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>1685</width>
-     <height>20</height>
-    </rect>
-   </property>
-  </widget>
-  <widget class="QStatusBar" name="statusbar"/>
- </widget>
- <resources/>
- <connections/>
+   <widget class="QGroupBox" name="infoGroup">  
+      <property name="geometry">  
+       <rect>  
+        <x>200</x>  
+        <y>240</y>  
+        <width>180</width>  
+        <height>120</height>  
+       </rect>  
+      </property>  
+      <property name="title">  
+       <string>Información</string>  
+      </property>  
+      <widget class="QLabel" name="coordXLabel">  
+       <property name="geometry">  
+        <rect>  
+         <x>10</x>  
+         <y>20</y>  
+         <width>30</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>X:</string>  
+       </property>  
+      </widget>  
+      <widget class="QLabel" name="coordXValue">  
+       <property name="geometry">  
+        <rect>  
+         <x>40</x>  
+         <y>20</y>  
+         <width>60</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>0000</string>  
+       </property>  
+      </widget>  
+      <widget class="QLabel" name="coordYLabel">  
+       <property name="geometry">  
+        <rect>  
+         <x>10</x>  
+         <y>40</y>  
+         <width>30</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Y:</string>  
+       </property>  
+      </widget>  
+      <widget class="QLabel" name="coordYValue">  
+       <property name="geometry">  
+        <rect>  
+         <x>40</x>  
+         <y>40</y>  
+         <width>60</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>0000</string>  
+       </property>  
+      </widget>  
+      <widget class="QLabel" name="texFileLabel">  
+       <property name="geometry">  
+        <rect>  
+         <x>10</x>  
+         <y>65</y>  
+         <width>160</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Ningún archivo .tex</string>  
+       </property>  
+      </widget>  
+      <widget class="QLabel" name="elementLabel">  
+       <property name="geometry">  
+        <rect>  
+         <x>10</x>  
+         <y>85</y>  
+         <width>160</width>  
+         <height>20</height>  
+        </rect>  
+       </property>  
+       <property name="text">  
+        <string>Elemento: Ninguno</string>  
+       </property>  
+      </widget>  
+     </widget>  
+     <widget class="QLabel" name="label">  
+      <property name="geometry">  
+       <rect>  
+        <x>10</x>  
+        <y>370</y>  
+        <width>71</width>  
+        <height>16</height>  
+       </rect>  
+      </property>  
+      <property name="text">  
+       <string>Sectores :</string>  
+      </property>  
+     </widget>  
+     <widget class="QListWidget" name="sectorList">  
+      <property name="geometry">  
+       <rect>  
+        <x>10</x>  
+        <y>390</y>  
+        <width>371</width>  
+        <height>80</height>  
+       </rect>  
+      </property>  
+     </widget>  
+     <widget class="QPushButton" name="editVerticesButton">  
+      <property name="geometry">  
+       <rect>  
+        <x>10</x>  
+        <y>510</y>  
+        <width>110</width>  
+        <height>23</height>  
+       </rect>  
+      </property>  
+      <property name="text">  
+       <string>Editar vertices</string>  
+      </property>  
+     </widget>  
+     <widget class="QPushButton" name="deleteSectorButton">  
+      <property name="geometry">  
+       <rect>  
+        <x>10</x>  
+        <y>480</y>  
+        <width>110</width>  
+        <height>23</height>  
+       </rect>  
+      </property>  
+      <property name="text">  
+       <string>Eliminar sector</string>  
+      </property>  
+     </widget>  
+     <widget class="QPushButton" name="exportButton">  
+      <property name="geometry">  
+       <rect>  
+        <x>10</x>  
+        <y>540</y>  
+        <width>110</width>  
+        <height>23</height>  
+       </rect>  
+      </property>  
+      <property name="text">  
+       <string>Exportar mapa</string>  
+      </property>  
+     </widget>  
+     <widget class="QPushButton" name="importButton">  
+      <property name="geometry">  
+       <rect>  
+        <x>125</x>  
+        <y>460</y>  
+        <width>110</width>  
+        <height>23</height>  
+       </rect>  
+      </property>  
+      <property name="text">  
+       <string>Importar mapa</string>  
+      </property>  
+     </widget>  
+    </widget>  
+   </widget>  
+  </widget>  
+  <widget class="QMenuBar" name="menubar">  
+   <property name="geometry">  
+    <rect>  
+     <x>0</x>  
+     <y>0</y>  
+     <width>1685</width>  
+     <height>20</height>  
+    </rect>  
+   </property>  
+  </widget>  
+  <widget class="QStatusBar" name="statusbar"/>  
+ </widget>  
+ <resources/>  
+ <connections/>  
 </ui>

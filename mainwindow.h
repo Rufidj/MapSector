@@ -4,6 +4,7 @@
 #include <QMainWindow>
 #include <QGraphicsScene>
 #include "MapStructures.h"
+#include "textureselectordialog.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -38,10 +39,12 @@ private slots:
     void onWallPointAdded(QPointF pos);
     void onWallFinished();
     void updateTextureComboBoxes();
+    void forceSyncSectorList();
     // Slots para texturas - AÑADE ESTAS LÍNEAS
-    void on_floorTextureCombo_currentIndexChanged(int index);
-    void on_ceilingTextureCombo_currentIndexChanged(int index);
-    void on_wallTextureCombo_currentIndexChanged(int index);
+    void on_wallTextureThumb_clicked();
+    void on_ceilingTextureThumb_clicked();
+    void on_floorTextureThumb_clicked();
+    void updateTextureThumbnails();
 
 private:
     Ui::MainWindow *ui;

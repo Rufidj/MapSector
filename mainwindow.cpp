@@ -97,8 +97,11 @@ void MainWindow::on_addTextureButton_clicked() {
                                                     "Seleccionar archivo .tex", "", "TEX Files (*.tex)");
 
     if (!filename.isEmpty()) {
-        loadTEXFile(filename);
-        updateTextureList();
+        if (loadTEXFile(filename)) {
+            updateTextureList();
+            forceSyncSectorList(); // Añadir esta línea
+            qDebug() << "Texturas cargadas:" << textures.size();
+        }
     }
 }
 
@@ -123,40 +126,38 @@ void MainWindow::updateSectorList() {
 
 void MainWindow::updateTextureList() {
     // Limpiar thumbnails existentes
-    ui->wallTextureThumb->clear();
-    ui->ceilingTextureThumb->clear();
-    ui->floorTextureThumb->clear();
+    ui->wallTextureThumb->setIcon(QIcon());
+    ui->ceilingTextureThumb->setIcon(QIcon());
+    ui->floorTextureThumb->setIcon(QIcon());
 
     if (textures.isEmpty()) {
         ui->texFileLabel->setText("Ningún archivo .tex cargado");
-        updateTextureComboBoxes();
         return;
     }
 
-    // Mostrar primeras 3 texturas como thumbnails
+    // Mostrar primeras 3 texturas como thumbnails (64x64 para mejor visibilidad)
     int thumbCount = qMin(3, textures.size());
 
     for (int i = 0; i < thumbCount; i++) {
         if (!textures[i].pixmap.isNull()) {
-            QPixmap thumbnail = textures[i].pixmap.scaled(48, 48,
+            QPixmap thumbnail = textures[i].pixmap.scaled(64, 64,
                                                           Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
             switch (i) {
             case 0:
-                ui->wallTextureThumb->setPixmap(thumbnail);
+                ui->wallTextureThumb->setIcon(QIcon(thumbnail));
                 break;
             case 1:
-                ui->ceilingTextureThumb->setPixmap(thumbnail);
+                ui->ceilingTextureThumb->setIcon(QIcon(thumbnail));
                 break;
             case 2:
-                ui->floorTextureThumb->setPixmap(thumbnail);
+                ui->floorTextureThumb->setIcon(QIcon(thumbnail));
                 break;
             }
         }
     }
 
     ui->texFileLabel->setText(QString("Archivo .tex: %1 texturas").arg(textures.size()));
-    updateTextureComboBoxes();
 }
 
 void MainWindow::drawSector(const EditorSector &sector) {
@@ -417,95 +418,38 @@ void MainWindow::on_deleteSectorButton_clicked() {
 }
 
 void MainWindow::updateTextureComboBoxes() {
-    // Limpiar comboboxes
-    ui->floorTextureCombo->clear();
-    ui->ceilingTextureCombo->clear();
-    ui->wallTextureCombo->clear();
 
-    // Configurar tamaño de iconos
-    ui->floorTextureCombo->setIconSize(QSize(32, 32));
-    ui->ceilingTextureCombo->setIconSize(QSize(32, 32));
-    ui->wallTextureCombo->setIconSize(QSize(32, 32));
 
-    // Añadir opción "Sin textura"
-    ui->floorTextureCombo->addItem("Sin textura", 0);
-    ui->ceilingTextureCombo->addItem("Sin textura", 0);
-    ui->wallTextureCombo->addItem("Sin textura", 0);
 
     // Añadir texturas disponibles con thumbnails
     for (const TextureEntry &tex : textures) {
         QPixmap pixmap(tex.filename);
         QIcon icon;
-
         if (!pixmap.isNull()) {
             // Crear thumbnail pequeño para combobox
             QPixmap thumbnail = pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::SmoothTransformation);
             icon = QIcon(thumbnail);
         }
-
         QString displayName = QString("%1: %2").arg(tex.id).arg(QFileInfo(tex.filename).fileName());
-        ui->floorTextureCombo->addItem(icon, displayName, tex.id);
-        ui->ceilingTextureCombo->addItem(icon, displayName, tex.id);
-        ui->wallTextureCombo->addItem(icon, displayName, tex.id);
     }
 }
 
 void MainWindow::on_sectorList_currentRowChanged(int index) {
+    // Validar consistencia entre UI y datos
+    if (index >= 0 && index >= sectors.size()) {
+        qDebug() << "Error: Inconsistencia entre UI y datos - UI index:" << index << "sectors.size():" << sectors.size();
+        selectedSectorIndex = -1;
+        return;
+    }
+
     selectedSectorIndex = index;
+    qDebug() << "Sector seleccionado, índice:" << index;
 
     if (index >= 0 && index < sectors.size()) {
         const EditorSector &sector = sectors[index];
-
-        // Actualizar spinboxes de altura
         ui->floorHeightSpin->setValue(sector.floor_height);
         ui->ceilingHeightSpin->setValue(sector.ceiling_height);
-
-        // Actualizar comboboxes de texturas
-        // Buscar el índice en el combobox que corresponde al texture_id
-        for (int i = 0; i < ui->floorTextureCombo->count(); i++) {
-            if (ui->floorTextureCombo->itemData(i).toInt() == (int)sector.floor_texture_id) {
-                ui->floorTextureCombo->setCurrentIndex(i);
-                break;
-            }
-        }
-
-        for (int i = 0; i < ui->ceilingTextureCombo->count(); i++) {
-            if (ui->ceilingTextureCombo->itemData(i).toInt() == (int)sector.ceiling_texture_id) {
-                ui->ceilingTextureCombo->setCurrentIndex(i);
-                break;
-            }
-        }
-
-        for (int i = 0; i < ui->wallTextureCombo->count(); i++) {
-            if (ui->wallTextureCombo->itemData(i).toInt() == (int)sector.wall_texture_id) {
-                ui->wallTextureCombo->setCurrentIndex(i);
-                break;
-            }
-        }
-    }
-}
-
-void MainWindow::on_floorTextureCombo_currentIndexChanged(int index) {
-    if (selectedSectorIndex >= 0 && selectedSectorIndex < sectors.size()) {
-        int textureId = ui->floorTextureCombo->currentData().toInt();
-        if (textureId < 0) textureId = 0;
-        sectors[selectedSectorIndex].floor_texture_id = textureId;
-    }
-}
-
-void MainWindow::on_ceilingTextureCombo_currentIndexChanged(int index) {
-    if (selectedSectorIndex >= 0 && selectedSectorIndex < sectors.size()) {
-        int textureId = ui->ceilingTextureCombo->currentData().toInt();
-        if (textureId < 0) textureId = 0;
-        sectors[selectedSectorIndex].ceiling_texture_id = textureId;
-    }
-}
-
-void MainWindow::on_wallTextureCombo_currentIndexChanged(int index) {
-    if (selectedSectorIndex >= 0 && selectedSectorIndex < sectors.size()) {
-        int textureId = ui->wallTextureCombo->currentData().toInt();
-        if (textureId < 0) textureId = 0;
-        sectors[selectedSectorIndex].wall_texture_id = textureId;
+        updateTextureThumbnails();
     }
 }
 
@@ -843,6 +787,132 @@ bool MainWindow::loadTEXFile(const QString &filename) {
                              QString("Cargadas %1 texturas de %2").arg(textures.size()).arg(header.num_images));
 
     return true;
+}
+
+void MainWindow::on_wallTextureThumb_clicked() {
+    qDebug() << "textures.size():" << textures.size();
+    qDebug() << "selectedSectorIndex:" << selectedSectorIndex;
+    qDebug() << "sectors.size():" << sectors.size();
+
+    if (textures.isEmpty()) {
+        QMessageBox::information(this, "Información", "No hay texturas cargadas. Por favor, carga un archivo .tex primero");
+        return;
+    }
+
+    if (selectedSectorIndex < 0 || selectedSectorIndex >= sectors.size()) {
+        QMessageBox::information(this, "Información", "No hay sector seleccionado. Por favor, selecciona un sector de la lista");
+        return;
+    }
+
+    TextureSelectorDialog dialog(this);
+    dialog.setTextures(textures);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        int textureId = dialog.selectedTextureId();
+        if (textureId >= 0 && textureId < textures.size()) {
+            sectors[selectedSectorIndex].wall_texture_id = textureId;
+            updateTextureThumbnails();
+            updateSectorList();
+        }
+    }
+}
+
+void MainWindow::on_ceilingTextureThumb_clicked() {
+    if (textures.isEmpty() || selectedSectorIndex < 0 || selectedSectorIndex >= sectors.size()) {
+        QMessageBox::information(this, "Información",
+                                 "Por favor, carga un archivo .tex y selecciona un sector primero");
+        return;
+    }
+
+    TextureSelectorDialog dialog(this);
+    dialog.setTextures(textures);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        int textureId = dialog.selectedTextureId();
+        if (textureId >= 0 && textureId < textures.size()) {
+            sectors[selectedSectorIndex].ceiling_texture_id = textureId;
+            updateTextureThumbnails();
+            updateSectorList();
+        }
+    }
+}
+
+void MainWindow::on_floorTextureThumb_clicked() {
+    if (textures.isEmpty() || selectedSectorIndex < 0 || selectedSectorIndex >= sectors.size()) {
+        QMessageBox::information(this, "Información",
+                                 "Por favor, carga un archivo .tex y selecciona un sector primero");
+        return;
+    }
+
+    TextureSelectorDialog dialog(this);
+    dialog.setTextures(textures);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        int textureId = dialog.selectedTextureId();
+        if (textureId >= 0 && textureId < textures.size()) {
+            sectors[selectedSectorIndex].floor_texture_id = textureId;
+            updateTextureThumbnails();
+            updateSectorList();
+        }
+    }
+}
+
+void MainWindow::updateTextureThumbnails() {
+    if (selectedSectorIndex < 0 || selectedSectorIndex >= sectors.size()) {
+        return;
+    }
+
+    const EditorSector &sector = sectors[selectedSectorIndex];
+
+    // Función auxiliar para encontrar textura por ID
+    auto findTextureById = [&](uint32_t id) -> const TextureEntry* {
+        for (const TextureEntry &tex : textures) {
+            if (tex.id == id) {
+                return &tex;
+            }
+        }
+        return nullptr;
+    };
+
+    // Actualizar thumbnail de pared
+    const TextureEntry *wallTex = findTextureById(sector.wall_texture_id);
+    if (wallTex && !wallTex->pixmap.isNull()) {
+        QPixmap thumb = wallTex->pixmap.scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        ui->wallTextureThumb->setIcon(QIcon(thumb));
+    }
+
+    // Actualizar thumbnail de techo
+    const TextureEntry *ceilingTex = findTextureById(sector.ceiling_texture_id);
+    if (ceilingTex && !ceilingTex->pixmap.isNull()) {
+        QPixmap thumb = ceilingTex->pixmap.scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        ui->ceilingTextureThumb->setIcon(QIcon(thumb));
+    }
+
+    // Actualizar thumbnail de suelo
+    const TextureEntry *floorTex = findTextureById(sector.floor_texture_id);
+    if (floorTex && !floorTex->pixmap.isNull()) {
+        QPixmap thumb = floorTex->pixmap.scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        ui->floorTextureThumb->setIcon(QIcon(thumb));
+    }
+}
+
+void MainWindow::forceSyncSectorList() {
+    qDebug() << "Sincronización forzada - sectors.size():" << sectors.size();
+
+    // Limpiar completamente la UI
+    ui->sectorList->clear();
+    selectedSectorIndex = -1;
+
+    // Reconstruir desde el vector real
+    for (int i = 0; i < sectors.size(); i++) {
+        const EditorSector &sector = sectors[i];
+        ui->sectorList->addItem(QString("Sector %1 (Piso: %2, Techo: %3)")
+                                    .arg(sector.id)
+                                    .arg(sector.floor_height)
+                                    .arg(sector.ceiling_height));
+    }
+
+    qDebug() << "UI reconstruida con" << ui->sectorList->count() << "elementos";
 }
 
 MainWindow::~MainWindow()
