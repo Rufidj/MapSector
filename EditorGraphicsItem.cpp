@@ -3,12 +3,12 @@
 #include <QPen>
 #include <QBrush>
 
-EditorSectorItem::EditorSectorItem(int sectorIndex, const EditorSector &s, QGraphicsItem *parent)
-    : QObject(), QGraphicsPolygonItem(parent), sector(s), sectorIdx(sectorIndex)
+EditorSectorItem::EditorSectorItem(int sectorIndex, const ModernRegion &r, QGraphicsItem *parent)
+    : QObject(), QGraphicsPolygonItem(parent), region(r), sectorIdx(sectorIndex)
 {
     QPolygonF polygon;
-    for (const QPointF &vertex : sector.vertices) {
-        polygon << vertex;
+    for (const ModernPoint &point : region.points) {
+        polygon << QPointF(point.x, point.y);
     }
     setPolygon(polygon);
     setPen(QPen(Qt::blue, 2));
@@ -21,15 +21,19 @@ EditorSectorItem::EditorSectorItem(int sectorIndex, const EditorSector &s, QGrap
 
 QVariant EditorSectorItem::itemChange(GraphicsItemChange change, const QVariant &value) {
     if (change == ItemPositionHasChanged) {
-        // Actualizar vértices del sector basándose en la nueva posición del item
         QPointF newPos = value.toPointF();
         QPointF delta = newPos;
 
-        // Recalcular vértices en coordenadas de escena
+        // Actualizar puntos en coordenadas de escena
         QPolygonF polygon = this->polygon();
-        sector.vertices.clear();
-        for (const QPointF &point : polygon) {
-            sector.vertices.append(mapToScene(point));
+        region.points.clear();
+        for (int i = 0; i < polygon.size(); i++) {
+            QPointF scenePoint = mapToScene(polygon[i]);
+            ModernPoint point;
+            point.x = (int32_t)scenePoint.x();
+            point.y = (int32_t)scenePoint.y();
+            point.active = 1;
+            region.points.push_back(point);
         }
 
         emit sectorMoved(sectorIdx, delta);
@@ -37,11 +41,11 @@ QVariant EditorSectorItem::itemChange(GraphicsItemChange change, const QVariant 
     return QGraphicsPolygonItem::itemChange(change, value);
 }
 
-void EditorSectorItem::updateFromSector(const EditorSector &newSector) {
-    sector = newSector;
+void EditorSectorItem::updateFromRegion(const ModernRegion &newRegion) {
+    region = newRegion;
     QPolygonF polygon;
-    for (const QPointF &vertex : sector.vertices) {
-        polygon << vertex;
+    for (const ModernPoint &point : region.points) {
+        polygon << QPointF(point.x, point.y);
     }
     setPolygon(polygon);
 }

@@ -12,10 +12,10 @@ class EditorSectorItem : public QObject, public QGraphicsPolygonItem
     Q_OBJECT
 
 public:
-    EditorSectorItem(int sectorIndex, const EditorSector &sector, QGraphicsItem *parent = nullptr);
+    EditorSectorItem(int sectorIndex, const ModernRegion &region, QGraphicsItem *parent = nullptr);
 
-    EditorSector getSector() const { return sector; }
-    void updateFromSector(const EditorSector &newSector);
+    ModernRegion getRegion() const { return region; }
+    void updateFromRegion(const ModernRegion &newRegion);
     int getSectorIndex() const { return sectorIdx; }
 
 signals:
@@ -25,7 +25,7 @@ protected:
     QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
 
 private:
-    EditorSector sector;
+    ModernRegion region;
     int sectorIdx;
 };
 

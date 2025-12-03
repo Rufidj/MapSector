@@ -22,7 +22,9 @@ private slots:
     void on_addSectorButton_clicked();
     void on_addWallButton_clicked();
     void on_addTextureButton_clicked();
-    void on_exportButton_clicked();
+    void on_exportWLDButton_clicked();
+    void on_importWLDButton_clicked();
+    void on_newMapButton_clicked();
     void on_sectorList_currentRowChanged(int index);
     void on_floorHeightSpin_valueChanged(double value);
     void on_ceilingHeightSpin_valueChanged(double value);
@@ -32,45 +34,44 @@ private slots:
     void on_deleteSectorButton_clicked();
     void onSectorMoved(int sectorIndex, QPointF delta);
     void onVertexMoved(int sectorIndex, int vertexIndex, QPointF newPosition);
-    void on_importButton_clicked();
-
-
-    // Nuevos slots para paredes
     void onWallPointAdded(QPointF pos);
     void onWallFinished();
-    void updateTextureComboBoxes();
-    void forceSyncSectorList();
-    // Slots para texturas - AÑADE ESTAS LÍNEAS
     void on_wallTextureThumb_clicked();
     void on_ceilingTextureThumb_clicked();
     void on_floorTextureThumb_clicked();
-    void updateTextureThumbnails();
 
 private:
     Ui::MainWindow *ui;
     QGraphicsScene *scene;
 
-    QVector<EditorSector> sectors;
-    QVector<EditorWall> walls;
-    QVector<TextureEntry> textures;
+    // Reemplazar sectores/paredes individuales con mapa moderno
+    ModernMap currentMap;
 
-    bool drawingMode;
     QVector<QPointF> currentPolygon;
-    QGraphicsPolygonItem *previewPolygon;
-
-    // Nuevas variables para modo pared
     QVector<QPointF> currentWallPoints;
+    int selectedSectorIndex = -1;
 
-    EditorSector* selectedSector;
-    int selectedSectorIndex;
-
+    // Funciones de conversión y sincronización
+    void syncModernMapToUI();
+    void syncUIToModernMap();
     void updateSectorList();
     void updateTextureList();
-    void drawSector(const EditorSector &sector);
-    void drawWall(const EditorWall &wall);
-    bool exportToDMAP(const QString &filename);
-    bool importFromDMAP(const QString &filename);
-    bool loadTEXFile(const QString &filename);
+    void updateScene();
+    void drawRegion(const ModernRegion &region);
+    void drawWall(const ModernWall &wall);
+    void drawWLDMap();
+
+    // Funciones de archivo
+    bool loadFPGFile(const QString &filename);
+    bool exportToWLD(const QString &filename);
+    bool importFromWLD(const QString &filename);
+
+    // Funciones auxiliares
+    int findOrCreatePoint(const QPointF &pos);
+    void updateTextureThumbnails();
+    void forceSyncSectorList();
 };
+
+
 
 #endif // MAINWINDOW_H

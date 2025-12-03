@@ -9,7 +9,7 @@ class TextureSelectorDialog : public QDialog {
     Q_OBJECT
 public:
     TextureSelectorDialog(QWidget *parent = nullptr);
-    void setTextures(const QVector<TextureEntry> &textures);
+    void setTextures(const QVector<TextureEntry> &textures);  // QVector en lugar de std::vector
     int selectedTextureId() const { return m_selectedTextureId; }
 
 signals:
@@ -20,7 +20,7 @@ private slots:
 
 private:
     QListWidget *listWidget;
-    QVector<TextureEntry> textures;
+    QVector<TextureEntry> textures;  // QVector en lugar de std::vector
     int m_selectedTextureId = 0;
 };
 

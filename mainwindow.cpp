@@ -14,6 +14,7 @@
 #include "ZoomableGraphicsView.h"
 #include <QFileInfo>
 #include <QPixmap>
+#include <zlib.h>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -76,7 +77,7 @@ void MainWindow::on_addSectorButton_clicked() {
 }
 
 void MainWindow::on_addWallButton_clicked() {
-    if (sectors.size() < 1) {
+    if (currentMap.regions.size() < 1) {
         QMessageBox::warning(this, "Advertencia", "Necesitas al menos un sector primero");
         return;
     }
@@ -94,33 +95,26 @@ void MainWindow::on_addWallButton_clicked() {
 
 void MainWindow::on_addTextureButton_clicked() {
     QString filename = QFileDialog::getOpenFileName(this,
-                                                    "Seleccionar archivo .tex", "", "TEX Files (*.tex)");
+                                                    "Seleccionar archivo .fpg", "", "FPG Files (*.fpg)");
 
     if (!filename.isEmpty()) {
-        if (loadTEXFile(filename)) {
+        if (loadFPGFile(filename)) {
             updateTextureList();
-            forceSyncSectorList(); // Añadir esta línea
-            qDebug() << "Texturas cargadas:" << textures.size();
+            forceSyncSectorList();
+            qDebug() << "Texturas FPG cargadas:" << currentMap.textures.size();
         }
     }
 }
 
-void MainWindow::on_exportButton_clicked() {
-    QString filename = QFileDialog::getSaveFileName(this,
-                                                    "Guardar Mapa DMAP", "", "DMAP Files (*.dmap)");
 
-    if (!filename.isEmpty()) {
-        exportToDMAP(filename);
-    }
-}
 
 void MainWindow::updateSectorList() {
     ui->sectorList->clear();
-    for (const EditorSector &sector : sectors) {
+    for (const ModernRegion &region : currentMap.regions) {
         ui->sectorList->addItem(QString("Sector %1 (Piso: %2, Techo: %3)")
-                                    .arg(sector.id)
-                                    .arg(sector.floor_height)
-                                    .arg(sector.ceiling_height));
+                                    .arg(region.active)
+                                    .arg(region.floor_height)
+                                    .arg(region.ceiling_height));
     }
 }
 
@@ -130,18 +124,18 @@ void MainWindow::updateTextureList() {
     ui->ceilingTextureThumb->setIcon(QIcon());
     ui->floorTextureThumb->setIcon(QIcon());
 
-    if (textures.isEmpty()) {
-        ui->texFileLabel->setText("Ningún archivo .tex cargado");
+    if (currentMap.textures.empty()) {
+        ui->texFileLabel->setText("Ningún archivo .fpg cargado");
         return;
     }
 
-    // Mostrar primeras 3 texturas como thumbnails (64x64 para mejor visibilidad)
-    int thumbCount = qMin(3, textures.size());
+    // Mostrar primeras 3 texturas como thumbnails
+    int thumbCount = qMin(3, (int)currentMap.textures.size());
 
     for (int i = 0; i < thumbCount; i++) {
-        if (!textures[i].pixmap.isNull()) {
-            QPixmap thumbnail = textures[i].pixmap.scaled(64, 64,
-                                                          Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        if (!currentMap.textures[i].pixmap.isNull()) {
+            QPixmap thumbnail = currentMap.textures[i].pixmap.scaled(64, 64,
+                                                                     Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
             switch (i) {
             case 0:
@@ -157,139 +151,211 @@ void MainWindow::updateTextureList() {
         }
     }
 
-    ui->texFileLabel->setText(QString("Archivo .tex: %1 texturas").arg(textures.size()));
-}
-
-void MainWindow::drawSector(const EditorSector &sector) {
-    // Encontrar el índice del sector
-    int index = -1;
-    for (int i = 0; i < sectors.size(); i++) {
-        if (sectors[i].id == sector.id) {
-            index = i;
-            break;
-        }
-    }
-
-    if (index == -1) return;
-
-    EditorSectorItem *item = new EditorSectorItem(index, sector);
-    scene->addItem(item);
-
-    // Conectar señal para sincronizar datos
-    connect(item, &EditorSectorItem::sectorMoved,
-            this, &MainWindow::onSectorMoved);
-}
-
-void MainWindow::drawWall(const EditorWall &wall) {
-    scene->addLine(wall.p1.x(), wall.p1.y(), wall.p2.x(), wall.p2.y(),
-                   QPen(Qt::red, 3));
+    ui->texFileLabel->setText(QString("Archivo .fpg: %1 texturas").arg(currentMap.textures.size()));
 }
 
 
-void MainWindow::on_floorHeightSpin_valueChanged(double value) {
-    int index = ui->sectorList->currentRow();
-    if (index >= 0 && index < sectors.size()) {
-        sectors[index].floor_height = value;
-        updateSectorList();
-    }
-}
-
-void MainWindow::on_ceilingHeightSpin_valueChanged(double value) {
-    int index = ui->sectorList->currentRow();
-    if (index >= 0 && index < sectors.size()) {
-        sectors[index].ceiling_height = value;
-        updateSectorList();
-    }
-}
-
-bool MainWindow::exportToDMAP(const QString &filename) {
+bool MainWindow::loadFPGFile(const QString &filename) {
     QFile file(filename);
-    if (!file.open(QIODevice::WriteOnly)) {
-        QMessageBox::critical(this, "Error",
-                              "No se pudo crear el archivo: " + filename);
+    if (!file.open(QIODevice::ReadOnly)) {
+        QMessageBox::critical(this, "Error", "No se pudo abrir el archivo .fpg");
         return false;
     }
 
-    QDataStream out(&file);
-    out.setByteOrder(QDataStream::LittleEndian);
+    // Leer header principal (8 bytes)
+    QByteArray headerBytes = file.read(8);
+    qDebug() << "Header leído (hex):" << headerBytes.toHex();
 
-    // Header
-    out.writeRawData("DMAP", 4);
-    out << (uint32_t)1;  // version
-    out << (uint32_t)sectors.size();
-    out << (uint32_t)walls.size();
-    out << (uint32_t)textures.size();
+    QByteArray uncompressedData;
 
-    // CORRECCIÓN: Exportar texturas en el orden que espera el shader
-    // Orden del shader: 0=paredes, 1=piso, 2=techo
-    // Necesitamos reorganizar las texturas según este orden
+    // Detectar gzip
+    if (headerBytes.startsWith(QByteArray::fromHex("1f8b"))) {
+        qDebug() << "Archivo FPG comprimido con gzip detectado";
 
-    // Crear un mapa temporal para reorganizar texturas
-    QVector<TextureEntry> reorderedTextures;
+        // Volver al inicio y leer todo para descompresión
+        file.seek(0);
+        QByteArray compressedData = file.readAll();
 
-    // Para cada sector, necesitamos asegurarnos de que sus texturas
-    // estén en el orden correcto en el archivo DMAP
-    for (const EditorSector &sector : sectors) {
-        // Añadir textura de paredes (índice 0)
-        if (sector.wall_texture_id < textures.size()) {
-            reorderedTextures.append(textures[sector.wall_texture_id]);
+        // Descompresión robusta con buffer dinámico
+        z_stream strm;
+        strm.zalloc = Z_NULL;
+        strm.zfree = Z_NULL;
+        strm.opaque = Z_NULL;
+        strm.avail_in = compressedData.size();
+        strm.next_in = (Bytef*)compressedData.data();
+
+        // Inicializar inflate con modo gzip (+16)
+        int ret = inflateInit2(&strm, 15 + 16);
+        if (ret != Z_OK) {
+            qDebug() << "inflateInit2 failed:" << ret;
+            QMessageBox::critical(this, "Error", "Fallo al inicializar descompresión gzip");
+            return false;
         }
 
-        // Añadir textura de piso (índice 1)
-        if (sector.floor_texture_id < textures.size()) {
-            reorderedTextures.append(textures[sector.floor_texture_id]);
-        }
+        // Buffer dinámico que crece según necesidad
+        QByteArray buffer;
+        buffer.resize(4096); // Tamaño inicial
 
-        // Añadir textura de techo (índice 2)
-        if (sector.ceiling_texture_id < textures.size()) {
-            reorderedTextures.append(textures[sector.ceiling_texture_id]);
-        }
-    }
+        do {
+            strm.avail_out = buffer.size();
+            strm.next_out = (Bytef*)buffer.data();
 
-    // Exportar texturas reorganizadas
-    for (const TextureEntry &tex : reorderedTextures) {
-        char buffer[256] = {0};
-        // Usar solo el nombre del archivo, no la ruta completa
-        QString relativePath = QFileInfo(tex.filename).fileName();
-        strncpy(buffer, relativePath.toUtf8().constData(), 255);
-        out.writeRawData(buffer, 256);
-    }
+            ret = inflate(&strm, Z_NO_FLUSH);
 
-    // Sectores
-    for (const EditorSector &sector : sectors) {
-        out << sector.id;
-        out << sector.floor_height;
-        out << sector.ceiling_height;
+            if (ret == Z_STREAM_ERROR) {
+                qDebug() << "inflate error:" << ret;
+                inflateEnd(&strm);
+                QMessageBox::critical(this, "Error", "Error durante descompresión gzip");
+                return false;
+            }
 
-        // IMPORTANTE: Los IDs de textura ahora son 0, 1, 2 en orden
-        out << (uint32_t)0;  // wall_texture_id (índice 0 en DMAP)
-        out << (uint32_t)1;  // floor_texture_id (índice 1 en DMAP)
-        out << (uint32_t)2;  // ceiling_texture_id (índice 2 en DMAP)
+            // Calcular bytes descomprimidos en esta iteración
+            size_t have = buffer.size() - strm.avail_out;
+            uncompressedData.append(buffer.data(), have);
 
-        out << (uint32_t)sector.vertices.size();
+            // Si necesitamos más espacio, agrandar buffer
+            if (strm.avail_out == 0) {
+                buffer.resize(buffer.size() * 2);
+            }
 
-        for (const QPointF &vertex : sector.vertices) {
-            out << (float)vertex.x();
-            out << (float)vertex.y();
-        }
-    }
+        } while (ret != Z_STREAM_END);
 
-    // Paredes
-    for (const EditorWall &wall : walls) {
-        out << wall.sector1_id;
-        out << wall.sector2_id;
-        out << wall.texture_id;
-        out << (float)wall.p1.x();
-        out << (float)wall.p1.y();
-        out << (float)wall.p2.x();
-        out << (float)wall.p2.y();
+        inflateEnd(&strm);
+        qDebug() << "Descompresión exitosa - Bytes descomprimidos:" << uncompressedData.size();
+
+    } else {
+        // Archivo sin comprimir
+        file.seek(0);
+        uncompressedData = file.readAll();
+        qDebug() << "Archivo FPG sin comprimir detectado";
     }
 
     file.close();
 
+    // Validar magic number del formato FPG (case-insensitive)
+    if (uncompressedData.size() < 8) {
+        QMessageBox::critical(this, "Error", "Archivo FPG demasiado pequeño");
+        return false;
+    }
+
+    QString magicOriginal = QString::fromLatin1(uncompressedData.left(7));
+    QString magicBase = magicOriginal.left(3).toUpper();
+
+    if (magicBase != "F32") {
+        QMessageBox::critical(this, "Error",
+                              QString("Formato .fpg inválido - se esperaba 'F32*', se encontró '%1'")
+                                  .arg(magicOriginal));
+        return false;
+    }
+
+    qDebug() << "Magic number original:" << magicOriginal;
+    qDebug() << "Magic number validado correctamente";
+
+    // Configurar QDataStream con endianness correcto
+    QDataStream in(uncompressedData);
+    in.setByteOrder(QDataStream::LittleEndian);  // ¡CRUCIAL! BennuGD2 usa little-endian
+    in.setFloatingPointPrecision(QDataStream::SinglePrecision);
+
+    // Saltar header (8 bytes)
+    in.skipRawData(8);
+
+    // Procesar chunks del archivo FPG
+    int chunkCount = 0;
+    currentMap.textures.clear();
+
+    qDebug() << "Iniciando lectura de chunks...";
+
+    while (!in.atEnd()) {
+        // Leer estructura FPG_info usando operadores >> que respetan endianness
+        FPG_CHUNK chunk;
+        in >> chunk.code >> chunk.regsize;
+        in.readRawData(chunk.name, 32);
+        in.readRawData(chunk.filename, 12);
+        in >> chunk.width >> chunk.height >> chunk.flags;
+
+        if (in.status() != QDataStream::Ok) {
+            qDebug() << "Error leyendo chunk header";
+            break;
+        }
+
+        qDebug() << QString("Chunk %1 : código=%2, tamaño=%3x%4, flags=%5")
+                        .arg(chunkCount + 1)
+                        .arg(chunk.code)
+                        .arg(chunk.width)
+                        .arg(chunk.height)
+                        .arg(chunk.flags);
+
+        // Validar dimensiones del chunk
+        if (chunk.width <= 0 || chunk.height <= 0 ||
+            chunk.width > 4096 || chunk.height > 4096) {
+            qDebug() << "Chunk con dimensiones inválidas, saltando";
+            continue;
+        }
+
+        // Leer control points si flags > 0
+        if (chunk.flags > 0) {
+            int numPoints = chunk.flags;
+            for (int i = 0; i < numPoints; i++) {
+                int16_t x, y;
+                in >> x >> y;
+            }
+        }
+
+        // Calcular tamaño de datos de píxeles según formato
+        int pixelDataSize = chunk.width * chunk.height * 4; // 32 bits RGBA
+
+        // Leer datos de píxeles
+        char* pixelBuffer = new char[pixelDataSize];
+        int bytesRead = in.readRawData(pixelBuffer, pixelDataSize);
+
+        if (bytesRead != pixelDataSize) {
+            qDebug() << "Error: no se pudieron leer todos los bytes del chunk";
+            delete[] pixelBuffer;
+            break;
+        }
+
+        // Convertir de BGRA a RGBA manualmente para corregir colores
+        for (int i = 0; i < pixelDataSize; i += 4) {
+            char temp = pixelBuffer[i];
+            pixelBuffer[i] = pixelBuffer[i + 2];   // R = B
+            pixelBuffer[i + 2] = temp;             // B = R
+            // G y A permanecen igual
+        }
+
+        // Crear QImage desde el buffer corregido
+        QImage image(reinterpret_cast<const uchar*>(pixelBuffer),
+                     chunk.width, chunk.height, QImage::Format_RGBA8888);
+
+        if (!image.isNull()) {
+            // Crear QPixmap y añadir a currentMap.textures
+            QPixmap pixmap = QPixmap::fromImage(image);
+            TextureEntry tex(filename, chunk.code);
+            tex.pixmap = pixmap;
+            currentMap.textures.append(tex);
+            qDebug() << "Textura" << chunk.code << "cargada exitosamente";
+        } else {
+            qWarning() << "Error al crear QImage para chunk" << chunk.code;
+        }
+
+        delete[] pixelBuffer;
+        chunkCount++;
+
+        // Límite de seguridad para evitar bucles infinitos
+        if (chunkCount > 1000) {
+            qDebug() << "Alcanzado límite máximo de chunks";
+            break;
+        }
+    }
+
+    qDebug() << "Procesados" << chunkCount << "chunks";
+    qDebug() << "Texturas FPG cargadas:" << currentMap.textures.size();
+
+    updateTextureList();
+    updateTextureThumbnails();
+
     QMessageBox::information(this, "Éxito",
-                             QString("Mapa exportado: %1 sectores, %2 paredes, %3 texturas")
-                                 .arg(sectors.size()).arg(walls.size()).arg(reorderedTextures.size()));
+                             QString("Se cargaron %1 texturas desde el archivo FPG")
+                                 .arg(currentMap.textures.size()));
 
     return true;
 }
@@ -319,14 +385,23 @@ void MainWindow::onPolygonFinished() {
         return;
     }
 
-    // Crear sector con los vértices dibujados
-    EditorSector sector;
-    sector.id = sectors.size();
-    sector.floor_height = ui->floorHeightSpin->value();
-    sector.ceiling_height = ui->ceilingHeightSpin->value();
-    sector.vertices = currentPolygon;
+    // Crear región moderna con los vértices dibujados
+    ModernRegion region;
+    region.active = 1;
+    region.type = 0;
+    region.floor_height = ui->floorHeightSpin->value();
+    region.ceiling_height = ui->ceilingHeightSpin->value();
+    region.floor_tex = 0;
+    region.ceil_tex = 0;
+    region.fade = 0;
 
-    sectors.append(sector);
+    // Convertir QPointF a ModernPoint
+    for (const QPointF &vertex : currentPolygon) {
+        region.points.push_back(ModernPoint(static_cast<int32_t>(vertex.x()),
+                                            static_cast<int32_t>(vertex.y())));
+    }
+
+    currentMap.regions.push_back(region);
 
     // Eliminar SOLO elementos marcados como temporales
     QList<QGraphicsItem*> items = scene->items();
@@ -337,20 +412,164 @@ void MainWindow::onPolygonFinished() {
         }
     }
 
-    // Dibujar el sector final (azul)
-    drawSector(sector);
+    // Dibujar la región final
+    drawRegion(region);
 
     updateSectorList();
     currentPolygon.clear();
 
     QMessageBox::information(this, "Éxito",
-                             QString("Sector %1 creado con %2 vértices")
-                                 .arg(sector.id).arg(sector.vertices.size()));
+                             QString("Sector creado con %1 vértices")
+                                 .arg(region.points.size()));
+}
+
+void MainWindow::drawRegion(const ModernRegion &region) {
+    // Dibujar polígono del sector
+    QPolygonF polygon;
+    for (const ModernPoint &point : region.points) {
+        polygon << QPointF(point.x, point.y);
+    }
+    scene->addPolygon(polygon, QPen(Qt::blue, 2), QBrush(QColor(100, 100, 255, 50)));
+}
+
+void MainWindow::drawWall(const ModernWall &wall) {
+    if (wall.p1 < currentMap.points.size() && wall.p2 < currentMap.points.size()) {
+        const ModernPoint &p1 = currentMap.points[wall.p1];
+        const ModernPoint &p2 = currentMap.points[wall.p2];
+        scene->addLine(p1.x, p1.y, p2.x, p2.y, QPen(Qt::red, 3));
+    }
+}
+
+void MainWindow::on_floorHeightSpin_valueChanged(double value) {
+    int index = ui->sectorList->currentRow();
+    if (index >= 0 && index < currentMap.regions.size()) {
+        currentMap.regions[index].floor_height = value;
+        updateSectorList();
+    }
+}
+
+void MainWindow::on_ceilingHeightSpin_valueChanged(double value) {
+    int index = ui->sectorList->currentRow();
+    if (index >= 0 && index < currentMap.regions.size()) {
+        currentMap.regions[index].ceiling_height = value;
+        updateSectorList();
+    }
+}
+
+void MainWindow::on_exportWLDButton_clicked() {
+    QString filename = QFileDialog::getSaveFileName(this,
+                                                    "Guardar Mapa WLD", "", "WLD Files (*.wld)");
+
+    if (!filename.isEmpty()) {
+        if (currentMap.saveToWLD(filename)) {
+            QMessageBox::information(this, "Éxito", "Mapa guardado en formato WLD");
+        } else {
+            QMessageBox::critical(this, "Error", "No se pudo guardar el archivo WLD");
+        }
+    }
+}
+
+void MainWindow::on_importWLDButton_clicked() {
+    QString filename = QFileDialog::getOpenFileName(this,
+                                                    "Cargar Mapa WLD", "", "WLD Files (*.wld)");
+    if (filename.isEmpty()) return;
+
+    if (currentMap.loadFromWLD(filename)) {
+        // DIBUJAR LOS DATOS CARGADOS - esto falta
+        drawWLDMap();
+
+        QMessageBox::information(this, "Éxito",
+                                 QString("Mapa WLD cargado: %1 regiones, %2 paredes")
+                                     .arg(currentMap.regions.size())
+                                     .arg(currentMap.walls.size()));
+    }
+}
+
+void MainWindow::on_newMapButton_clicked() {
+    currentMap.clear();
+    scene->clear();
+
+    // Redibujar grid
+    for (int i = 0; i <= 800; i += 50) {
+        scene->addLine(i, 0, i, 800, QPen(Qt::lightGray));
+        scene->addLine(0, i, 800, i, QPen(Qt::lightGray));
+    }
+
+    updateSectorList();
+    QMessageBox::information(this, "Nuevo Mapa", "Mapa WLD creado exitosamente");
+}
+
+void MainWindow::updateScene() {
+    scene->clear();
+
+    // Redibujar grid
+    for (int i = 0; i <= 800; i += 50) {
+        scene->addLine(i, 0, i, 800, QPen(Qt::lightGray));
+        scene->addLine(0, i, 800, i, QPen(Qt::lightGray));
+    }
+
+    // Dibujar todas las regiones
+    for (const ModernRegion &region : currentMap.regions) {
+        drawRegion(region);
+    }
+
+    // Dibujar todas las paredes
+    for (const ModernWall &wall : currentMap.walls) {
+        drawWall(wall);
+    }
+}
+
+void MainWindow::syncModernMapToUI() {
+    ui->sectorList->clear();
+    for (size_t i = 0; i < currentMap.regions.size(); i++) {
+        const ModernRegion &region = currentMap.regions[i];
+        ui->sectorList->addItem(QString("Región %1 (Piso: %2, Techo: %3)")
+                                    .arg(i)
+                                    .arg(region.floor_height)
+                                    .arg(region.ceiling_height));
+    }
+}
+
+void MainWindow::syncUIToModernMap() {
+    // Esta función sincroniza los datos de la UI al mapa moderno
+    // Implementación según sea necesario
+}
+
+int MainWindow::findOrCreatePoint(const QPointF &pos) {
+    // Buscar punto existente
+    for (size_t i = 0; i < currentMap.points.size(); i++) {
+        if (currentMap.points[i].x == pos.x() && currentMap.points[i].y == pos.y()) {
+            return i;
+        }
+    }
+
+    // Crear nuevo punto
+    currentMap.points.emplace_back(pos.x(), pos.y());
+    return currentMap.points.size() - 1;
+}
+
+void MainWindow::on_sectorList_currentRowChanged(int index) {
+    // Validar consistencia entre UI y datos
+    if (index >= 0 && index >= currentMap.regions.size()) {
+        qDebug() << "Error: Inconsistencia entre UI y datos - UI index:" << index << "regions.size():" << currentMap.regions.size();
+        selectedSectorIndex = -1;
+        return;
+    }
+
+    selectedSectorIndex = index;
+    qDebug() << "Sector seleccionado, índice:" << index;
+
+    if (index >= 0 && index < currentMap.regions.size()) {
+        const ModernRegion &region = currentMap.regions[index];
+        ui->floorHeightSpin->setValue(region.floor_height);
+        ui->ceilingHeightSpin->setValue(region.ceiling_height);
+        updateTextureThumbnails();
+    }
 }
 
 void MainWindow::on_editVerticesButton_clicked() {
     int index = ui->sectorList->currentRow();
-    if (index < 0 || index >= sectors.size()) {
+    if (index < 0 || index >= currentMap.regions.size()) {
         QMessageBox::warning(this, "Error", "Selecciona un sector primero");
         return;
     }
@@ -358,19 +577,19 @@ void MainWindow::on_editVerticesButton_clicked() {
     // Limpiar escena y redibujar solo el sector seleccionado
     scene->clear();
 
-    EditorSector &sector = sectors[index];
+    ModernRegion &region = currentMap.regions[index];
 
     // Dibujar polígono del sector
     QPolygonF polygon;
-    for (const QPointF &vertex : sector.vertices) {
-        polygon << vertex;
+    for (const ModernPoint &point : region.points) {
+        polygon << QPointF(point.x, point.y);
     }
     scene->addPolygon(polygon, QPen(Qt::blue, 2), QBrush(QColor(100, 100, 255, 50)));
 
     // Dibujar vértices como VertexItem editables
-    for (int i = 0; i < sector.vertices.size(); i++) {
+    for (int i = 0; i < region.points.size(); i++) {
         VertexItem *vertexItem = new VertexItem(index, i);
-        vertexItem->setRect(sector.vertices[i].x() - 5, sector.vertices[i].y() - 5, 10, 10);
+        vertexItem->setRect(region.points[i].x - 5, region.points[i].y - 5, 10, 10);
         vertexItem->setPen(QPen(Qt::red, 2));
         vertexItem->setBrush(QBrush(Qt::red));
 
@@ -384,7 +603,7 @@ void MainWindow::on_editVerticesButton_clicked() {
 
 void MainWindow::on_deleteSectorButton_clicked() {
     int index = ui->sectorList->currentRow();
-    if (index < 0 || index >= sectors.size()) {
+    if (index < 0 || index >= currentMap.regions.size()) {
         QMessageBox::warning(this, "Error", "Selecciona un sector primero");
         return;
     }
@@ -392,12 +611,12 @@ void MainWindow::on_deleteSectorButton_clicked() {
     // Confirmar eliminación
     QMessageBox::StandardButton reply = QMessageBox::question(
         this, "Confirmar",
-        QString("¿Eliminar sector %1?").arg(sectors[index].id),
+        QString("¿Eliminar sector %1?").arg(index),
         QMessageBox::Yes | QMessageBox::No
         );
 
     if (reply == QMessageBox::Yes) {
-        sectors.removeAt(index);
+        currentMap.regions.erase(currentMap.regions.begin() + index);
 
         // Redibujar escena
         scene->clear();
@@ -409,55 +628,20 @@ void MainWindow::on_deleteSectorButton_clicked() {
         }
 
         // Redibujar sectores restantes
-        for (const EditorSector &s : sectors) {
-            drawSector(s);
+        for (const ModernRegion &region : currentMap.regions) {
+            drawRegion(region);
         }
 
         updateSectorList();
     }
 }
 
-void MainWindow::updateTextureComboBoxes() {
-
-
-
-    // Añadir texturas disponibles con thumbnails
-    for (const TextureEntry &tex : textures) {
-        QPixmap pixmap(tex.filename);
-        QIcon icon;
-        if (!pixmap.isNull()) {
-            // Crear thumbnail pequeño para combobox
-            QPixmap thumbnail = pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-            icon = QIcon(thumbnail);
-        }
-        QString displayName = QString("%1: %2").arg(tex.id).arg(QFileInfo(tex.filename).fileName());
-    }
-}
-
-void MainWindow::on_sectorList_currentRowChanged(int index) {
-    // Validar consistencia entre UI y datos
-    if (index >= 0 && index >= sectors.size()) {
-        qDebug() << "Error: Inconsistencia entre UI y datos - UI index:" << index << "sectors.size():" << sectors.size();
-        selectedSectorIndex = -1;
-        return;
-    }
-
-    selectedSectorIndex = index;
-    qDebug() << "Sector seleccionado, índice:" << index;
-
-    if (index >= 0 && index < sectors.size()) {
-        const EditorSector &sector = sectors[index];
-        ui->floorHeightSpin->setValue(sector.floor_height);
-        ui->ceilingHeightSpin->setValue(sector.ceiling_height);
-        updateTextureThumbnails();
-    }
-}
-
 void MainWindow::onSectorMoved(int sectorIndex, QPointF delta) {
-    if (sectorIndex >= 0 && sectorIndex < sectors.size()) {
+    if (sectorIndex >= 0 && sectorIndex < currentMap.regions.size()) {
         // Actualizar todos los vértices del sector en la colección principal
-        for (QPointF &vertex : sectors[sectorIndex].vertices) {
-            vertex += delta;
+        for (ModernPoint &point : currentMap.regions[sectorIndex].points) {
+            point.x += delta.x();
+            point.y += delta.y();
         }
 
         // Actualizar la lista visual
@@ -466,26 +650,27 @@ void MainWindow::onSectorMoved(int sectorIndex, QPointF delta) {
 }
 
 void MainWindow::onVertexMoved(int sectorIndex, int vertexIndex, QPointF newPosition) {
-    if (sectorIndex >= 0 && sectorIndex < sectors.size()) {
-        if (vertexIndex >= 0 && vertexIndex < sectors[sectorIndex].vertices.size()) {
+    if (sectorIndex >= 0 && sectorIndex < currentMap.regions.size()) {
+        if (vertexIndex >= 0 && vertexIndex < currentMap.regions[sectorIndex].points.size()) {
             // Actualizar el vértice en la colección principal
-            sectors[sectorIndex].vertices[vertexIndex] = newPosition;
+            currentMap.regions[sectorIndex].points[vertexIndex].x = newPosition.x();
+            currentMap.regions[sectorIndex].points[vertexIndex].y = newPosition.y();
 
             // Redibujar el sector con la nueva geometría
             scene->clear();
 
             // Redibujar polígono actualizado
             QPolygonF polygon;
-            for (const QPointF &vertex : sectors[sectorIndex].vertices) {
-                polygon << vertex;
+            for (const ModernPoint &point : currentMap.regions[sectorIndex].points) {
+                polygon << QPointF(point.x, point.y);
             }
             scene->addPolygon(polygon, QPen(Qt::blue, 2), QBrush(QColor(100, 100, 255, 50)));
 
             // Redibujar todos los vértices
-            for (int i = 0; i < sectors[sectorIndex].vertices.size(); i++) {
+            for (int i = 0; i < currentMap.regions[sectorIndex].points.size(); i++) {
                 VertexItem *vertexItem = new VertexItem(sectorIndex, i);
-                vertexItem->setRect(sectors[sectorIndex].vertices[i].x() - 5,
-                                    sectors[sectorIndex].vertices[i].y() - 5, 10, 10);
+                vertexItem->setRect(currentMap.regions[sectorIndex].points[i].x - 5,
+                                    currentMap.regions[sectorIndex].points[i].y - 5, 10, 10);
                 vertexItem->setPen(QPen(Qt::red, 2));
                 vertexItem->setBrush(QBrush(Qt::red));
 
@@ -524,24 +709,26 @@ void MainWindow::onWallFinished() {
         return;
     }
 
-    // Crear lista de nombres de sectores para el diálogo
-    QStringList sectorNames;
-    for (const EditorSector &sector : sectors) {
-        sectorNames.append(QString("Sector %1").arg(sector.id));
+    // Crear lista de nombres de regiones para el diálogo
+    QStringList regionNames;
+    for (const ModernRegion &region : currentMap.regions) {
+        regionNames.append(QString("Región %1").arg(region.active));
     }
 
     // Mostrar diálogo para configurar la pared
-    WallDialog dialog(sectorNames, this);
+    WallDialog dialog(regionNames, this);
     if (dialog.exec() == QDialog::Accepted) {
         // Crear pared con los datos del diálogo
-        EditorWall wall;
-        wall.sector1_id = dialog.getSector1Id();
-        wall.sector2_id = dialog.getSector2Id();
-        wall.texture_id = dialog.getTextureId();
-        wall.p1 = currentWallPoints[0];
-        wall.p2 = currentWallPoints[1];
+        ModernWall wall;
+        wall.front_region = dialog.getSector1Id();
+        wall.back_region = dialog.getSector2Id();
+        wall.texture = dialog.getTextureId();
 
-        walls.append(wall);
+        // Encontrar o crear puntos para la pared
+        wall.p1 = findOrCreatePoint(currentWallPoints[0]);
+        wall.p2 = findOrCreatePoint(currentWallPoints[1]);
+
+        currentMap.walls.push_back(wall);
 
         // Eliminar elementos temporales
         QList<QGraphicsItem*> items = scene->items();
@@ -556,8 +743,8 @@ void MainWindow::onWallFinished() {
         drawWall(wall);
 
         QMessageBox::information(this, "Éxito",
-                                 QString("Pared creada conectando sectores %1 y %2")
-                                     .arg(wall.sector1_id).arg(wall.sector2_id));
+                                 QString("Pared creada conectando regiones %1 y %2")
+                                     .arg(wall.front_region).arg(wall.back_region));
     } else {
         // Usuario canceló - eliminar elementos temporales
         QList<QGraphicsItem*> items = scene->items();
@@ -572,245 +759,24 @@ void MainWindow::onWallFinished() {
     currentWallPoints.clear();
 }
 
-bool MainWindow::importFromDMAP(const QString &filename) {
-    QFile file(filename);
-    if (!file.open(QIODevice::ReadOnly)) {
-        QMessageBox::critical(this, "Error", "No se pudo abrir el archivo");
-        return false;
-    }
-
-    QDataStream in(&file);
-    in.setByteOrder(QDataStream::LittleEndian);
-
-    // Leer header
-    char magic[5] = {0};
-    in.readRawData(magic, 4);
-    if (QString(magic) != "DMAP") {
-        QMessageBox::critical(this, "Error", "Formato de archivo inválido");
-        return false;
-    }
-
-    uint32_t version, sectorCount, wallCount, textureCount;
-    in >> version >> sectorCount >> wallCount >> textureCount;
-
-    // Limpiar datos existentes
-    sectors.clear();
-    walls.clear();
-    textures.clear();
-
-    // Leer texturas
-    for (uint32_t i = 0; i < textureCount; i++) {
-        char buffer[256];
-        in.readRawData(buffer, 256);
-        TextureEntry tex(QString::fromUtf8(buffer), i);
-        textures.append(tex);
-    }
-
-    // Leer sectores
-    for (uint32_t i = 0; i < sectorCount; i++) {
-        EditorSector sector;
-        uint32_t vertexCount;
-        in >> sector.id >> sector.floor_height >> sector.ceiling_height
-            >> sector.floor_texture_id >> sector.ceiling_texture_id
-            >> sector.wall_texture_id >> vertexCount;
-
-        for (uint32_t j = 0; j < vertexCount; j++) {
-            float x, y;
-            in >> x >> y;
-            sector.vertices.append(QPointF(x, y));
-        }
-        sectors.append(sector);
-    }
-
-    // Leer paredes
-    for (uint32_t i = 0; i < wallCount; i++) {
-        EditorWall wall;
-        float x1, y1, x2, y2;
-        in >> wall.sector1_id >> wall.sector2_id >> wall.texture_id
-            >> x1 >> y1 >> x2 >> y2;
-        wall.p1 = QPointF(x1, y1);
-        wall.p2 = QPointF(x2, y2);
-        walls.append(wall);
-    }
-
-    file.close();
-
-    // Redibujar todo
-    scene->clear();
-
-    // Redibujar grid
-    for (int i = 0; i <= 800; i += 50) {
-        scene->addLine(i, 0, i, 800, QPen(Qt::lightGray));
-        scene->addLine(0, i, 800, i, QPen(Qt::lightGray));
-    }
-
-    // Redibujar sectores
-    for (const EditorSector &s : sectors) {
-        drawSector(s);
-    }
-
-    // Redibujar paredes
-    for (const EditorWall &w : walls) {
-        drawWall(w);
-    }
-
-    updateSectorList();
-    updateTextureList();
-
-    QMessageBox::information(this, "Éxito",
-                             QString("Mapa importado: %1 sectores, %2 paredes, %3 texturas")
-                                 .arg(sectors.size()).arg(walls.size()).arg(textures.size()));
-
-    return true;
-}
-
-void MainWindow::on_importButton_clicked() {
-    QString filename = QFileDialog::getOpenFileName(
-        this, "Abrir Mapa DMAP", "", "DMAP Files (*.dmap)"
-        );
-
-    if (!filename.isEmpty()) {
-        importFromDMAP(filename);
-    }
-}
-
-bool MainWindow::loadTEXFile(const QString &filename) {
-    QFile file(filename);
-    if (!file.open(QIODevice::ReadOnly)) {
-        QMessageBox::critical(this, "Error", "No se pudo abrir el archivo .tex");
-        return false;
-    }
-
-    QDataStream in(&file);
-    in.setByteOrder(QDataStream::LittleEndian);
-
-    // Leer cabecera TEX_HEADER
-    TEX_HEADER header;
-    in.readRawData(reinterpret_cast<char*>(header.magic), 4);
-    in >> header.version >> header.num_images;
-    in.readRawData(reinterpret_cast<char*>(header.reserved), 6);
-
-    // Validar magic number
-    if (strncmp(header.magic, "TEX", 3) != 0) {
-        QMessageBox::critical(this, "Error", "Formato .tex inválido");
-        return false;
-    }
-
-    // Validar número de imágenes
-    if (header.num_images == 0 || header.num_images > 1000) {
-        QMessageBox::critical(this, "Error", "Número de imágenes inválido");
-        return false;
-    }
-
-    // Limpiar texturas existentes
-    textures.clear();
-
-    // Leer cada entrada TEX_ENTRY y cargar datos RGB
-    for (uint16_t i = 0; i < header.num_images; i++) {
-        TEX_ENTRY entry;
-        in >> entry.index >> entry.width >> entry.height >> entry.format;
-        in.readRawData(reinterpret_cast<char*>(entry.reserved), 250);
-
-        // Validar dimensiones
-        if (entry.width == 0 || entry.height == 0 ||
-            entry.width > 4096 || entry.height > 4096) {
-            qWarning() << "Dimensiones inválidas para textura" << entry.index;
-            continue;
-        }
-
-        // Calcular tamaño según formato
-        int dataSize;
-        QImage::Format format;
-
-        switch (entry.format) {
-        case 0: // RGB
-            dataSize = entry.width * entry.height * 3;
-            format = QImage::Format_RGB888;
-            break;
-        case 1: // RGBA
-            dataSize = entry.width * entry.height * 4;
-            format = QImage::Format_RGBA8888;
-            break;
-        default:
-            qWarning() << "Formato no soportado:" << entry.format;
-            continue;
-        }
-
-        // Validar tamaño de datos
-        if (dataSize <= 0 || dataSize > 16*1024*1024) { // Max 16MB por textura
-            qWarning() << "Tamaño de datos inválido:" << dataSize;
-            continue;
-        }
-
-        // Verificar que quedan suficientes bytes en el archivo
-        qint64 remaining = file.size() - file.pos();
-        if (remaining < dataSize) {
-            qWarning() << "Archivo truncado, faltan" << dataSize - remaining << "bytes";
-            break;
-        }
-
-        // Leer datos de imagen usando buffer temporal
-        char* rgbBuffer = new char[dataSize];
-        qint64 bytesRead = in.readRawData(rgbBuffer, dataSize);
-
-        if (bytesRead != dataSize) {
-            delete[] rgbBuffer;
-            qWarning() << "Error: no se pudieron leer todos los bytes de la imagen";
-            continue;
-        }
-
-        // Crear QImage desde el buffer
-        QImage image(reinterpret_cast<const uchar*>(rgbBuffer),
-                     entry.width, entry.height, format);
-
-        if (image.isNull()) {
-            delete[] rgbBuffer;
-            qWarning() << "Error al crear QImage para textura" << entry.index;
-            continue;
-        }
-
-        // Crear QPixmap y añadir a la lista
-        QPixmap pixmap = QPixmap::fromImage(image);
-        TextureEntry tex(filename, entry.index);
-        tex.pixmap = pixmap;
-        textures.append(tex);
-
-        delete[] rgbBuffer;  // Liberar memoria
-    }
-
-    file.close();
-
-    // Actualizar UI
-    updateTextureList();
-
-    QMessageBox::information(this, "Éxito",
-                             QString("Cargadas %1 texturas de %2").arg(textures.size()).arg(header.num_images));
-
-    return true;
-}
-
 void MainWindow::on_wallTextureThumb_clicked() {
-    qDebug() << "textures.size():" << textures.size();
-    qDebug() << "selectedSectorIndex:" << selectedSectorIndex;
-    qDebug() << "sectors.size():" << sectors.size();
-
-    if (textures.isEmpty()) {
-        QMessageBox::information(this, "Información", "No hay texturas cargadas. Por favor, carga un archivo .tex primero");
+    if (currentMap.textures.empty()) {
+        QMessageBox::information(this, "Información", "No hay texturas cargadas. Por favor, carga un archivo .fpg primero");
         return;
     }
 
-    if (selectedSectorIndex < 0 || selectedSectorIndex >= sectors.size()) {
+    if (selectedSectorIndex < 0 || selectedSectorIndex >= currentMap.regions.size()) {
         QMessageBox::information(this, "Información", "No hay sector seleccionado. Por favor, selecciona un sector de la lista");
         return;
     }
 
     TextureSelectorDialog dialog(this);
-    dialog.setTextures(textures);
+    dialog.setTextures(currentMap.textures);
 
     if (dialog.exec() == QDialog::Accepted) {
         int textureId = dialog.selectedTextureId();
-        if (textureId >= 0 && textureId < textures.size()) {
-            sectors[selectedSectorIndex].wall_texture_id = textureId;
+        if (textureId >= 0 && textureId < currentMap.textures.size()) {
+            currentMap.regions[selectedSectorIndex].wall_tex = textureId;
             updateTextureThumbnails();
             updateSectorList();
         }
@@ -818,19 +784,19 @@ void MainWindow::on_wallTextureThumb_clicked() {
 }
 
 void MainWindow::on_ceilingTextureThumb_clicked() {
-    if (textures.isEmpty() || selectedSectorIndex < 0 || selectedSectorIndex >= sectors.size()) {
+    if (currentMap.textures.empty() || selectedSectorIndex < 0 || selectedSectorIndex >= currentMap.regions.size()) {
         QMessageBox::information(this, "Información",
-                                 "Por favor, carga un archivo .tex y selecciona un sector primero");
+                                 "Por favor, carga un archivo .fpg y selecciona un sector primero");
         return;
     }
 
     TextureSelectorDialog dialog(this);
-    dialog.setTextures(textures);
+    dialog.setTextures(currentMap.textures);
 
     if (dialog.exec() == QDialog::Accepted) {
         int textureId = dialog.selectedTextureId();
-        if (textureId >= 0 && textureId < textures.size()) {
-            sectors[selectedSectorIndex].ceiling_texture_id = textureId;
+        if (textureId >= 0 && textureId < currentMap.textures.size()) {
+            currentMap.regions[selectedSectorIndex].ceil_tex = textureId;
             updateTextureThumbnails();
             updateSectorList();
         }
@@ -838,35 +804,55 @@ void MainWindow::on_ceilingTextureThumb_clicked() {
 }
 
 void MainWindow::on_floorTextureThumb_clicked() {
-    if (textures.isEmpty() || selectedSectorIndex < 0 || selectedSectorIndex >= sectors.size()) {
+    if (currentMap.textures.empty() || selectedSectorIndex < 0 || selectedSectorIndex >= currentMap.regions.size()) {
         QMessageBox::information(this, "Información",
-                                 "Por favor, carga un archivo .tex y selecciona un sector primero");
+                                 "Por favor, carga un archivo .fpg y selecciona un sector primero");
         return;
     }
 
     TextureSelectorDialog dialog(this);
-    dialog.setTextures(textures);
+    dialog.setTextures(currentMap.textures);
 
     if (dialog.exec() == QDialog::Accepted) {
         int textureId = dialog.selectedTextureId();
-        if (textureId >= 0 && textureId < textures.size()) {
-            sectors[selectedSectorIndex].floor_texture_id = textureId;
+        if (textureId >= 0 && textureId < currentMap.textures.size()) {
+            currentMap.regions[selectedSectorIndex].floor_tex = textureId;
             updateTextureThumbnails();
             updateSectorList();
         }
     }
 }
 
+void MainWindow::forceSyncSectorList() {
+    qDebug() << "Sincronización forzada - regions.size():" << currentMap.regions.size();
+
+    // Limpiar completamente la UI
+    ui->sectorList->clear();
+    selectedSectorIndex = -1;
+
+    // Reconstruir desde el vector real
+    for (int i = 0; i < currentMap.regions.size(); i++) {
+        const ModernRegion &region = currentMap.regions[i];
+        ui->sectorList->addItem(QString("Sector %1 (Piso: %2, Techo: %3)")
+                                    .arg(region.active)
+                                    .arg(region.floor_height)
+                                    .arg(region.ceiling_height));
+    }
+
+    qDebug() << "UI reconstruida con" << ui->sectorList->count() << "elementos";
+}
+
+
 void MainWindow::updateTextureThumbnails() {
-    if (selectedSectorIndex < 0 || selectedSectorIndex >= sectors.size()) {
+    if (selectedSectorIndex < 0 || selectedSectorIndex >= currentMap.regions.size()) {
         return;
     }
 
-    const EditorSector &sector = sectors[selectedSectorIndex];
+    const ModernRegion &region = currentMap.regions[selectedSectorIndex];
 
     // Función auxiliar para encontrar textura por ID
     auto findTextureById = [&](uint32_t id) -> const TextureEntry* {
-        for (const TextureEntry &tex : textures) {
+        for (const TextureEntry &tex : currentMap.textures) {
             if (tex.id == id) {
                 return &tex;
             }
@@ -875,48 +861,57 @@ void MainWindow::updateTextureThumbnails() {
     };
 
     // Actualizar thumbnail de pared
-    const TextureEntry *wallTex = findTextureById(sector.wall_texture_id);
+    const TextureEntry *wallTex = findTextureById(region.wall_tex);     // wall_tex
     if (wallTex && !wallTex->pixmap.isNull()) {
         QPixmap thumb = wallTex->pixmap.scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
         ui->wallTextureThumb->setIcon(QIcon(thumb));
     }
 
     // Actualizar thumbnail de techo
-    const TextureEntry *ceilingTex = findTextureById(sector.ceiling_texture_id);
+    const TextureEntry *ceilingTex = findTextureById(region.ceil_tex); // ceil_tex
     if (ceilingTex && !ceilingTex->pixmap.isNull()) {
         QPixmap thumb = ceilingTex->pixmap.scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
         ui->ceilingTextureThumb->setIcon(QIcon(thumb));
     }
 
     // Actualizar thumbnail de suelo
-    const TextureEntry *floorTex = findTextureById(sector.floor_texture_id);
+    const TextureEntry *floorTex = findTextureById(region.floor_tex);  // floor_tex
     if (floorTex && !floorTex->pixmap.isNull()) {
         QPixmap thumb = floorTex->pixmap.scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation);
         ui->floorTextureThumb->setIcon(QIcon(thumb));
     }
 }
 
-void MainWindow::forceSyncSectorList() {
-    qDebug() << "Sincronización forzada - sectors.size():" << sectors.size();
+void MainWindow::drawWLDMap() {
+    // Limpiar escena
+    scene->clear();
 
-    // Limpiar completamente la UI
-    ui->sectorList->clear();
-    selectedSectorIndex = -1;
-
-    // Reconstruir desde el vector real
-    for (int i = 0; i < sectors.size(); i++) {
-        const EditorSector &sector = sectors[i];
-        ui->sectorList->addItem(QString("Sector %1 (Piso: %2, Techo: %3)")
-                                    .arg(sector.id)
-                                    .arg(sector.floor_height)
-                                    .arg(sector.ceiling_height));
+    // Redibujar grid
+    for (int i = 0; i <= 800; i += 50) {
+        scene->addLine(i, 0, i, 800, QPen(Qt::lightGray));
+        scene->addLine(0, i, 800, i, QPen(Qt::lightGray));
     }
 
-    qDebug() << "UI reconstruida con" << ui->sectorList->count() << "elementos";
+    // Dibujar regiones (sectores) WLD
+    for (const ModernRegion &region : currentMap.regions) {
+        QPolygonF polygon;
+        for (const ModernPoint &point : region.points) {
+            polygon << QPointF(point.x, point.y);
+        }
+        scene->addPolygon(polygon, QPen(Qt::blue, 2), QBrush(QColor(100, 100, 255, 50)));
+    }
+
+    // Dibujar paredes WLD
+    for (const ModernWall &wall : currentMap.walls) {
+        if (wall.p1 < currentMap.points.size() && wall.p2 < currentMap.points.size()) {
+            const ModernPoint &p1 = currentMap.points[wall.p1];
+            const ModernPoint &p2 = currentMap.points[wall.p2];
+            scene->addLine(p1.x, p1.y, p2.x, p2.y, QPen(Qt::red, 3));
+        }
+    }
 }
 
 MainWindow::~MainWindow()
 {
     delete ui;
 }
-
