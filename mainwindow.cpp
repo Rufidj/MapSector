@@ -110,9 +110,10 @@ void MainWindow::on_addTextureButton_clicked() {
 
 void MainWindow::updateSectorList() {
     ui->sectorList->clear();
-    for (const ModernRegion &region : currentMap.regions) {
+    for (int i = 0; i < currentMap.regions.size(); i++) {
+        const ModernRegion &region = currentMap.regions[i];
         ui->sectorList->addItem(QString("Sector %1 (Piso: %2, Techo: %3)")
-                                    .arg(region.active)
+                                    .arg(i)  // <-- Usar índice i en lugar de region.active
                                     .arg(region.floor_height)
                                     .arg(region.ceiling_height));
     }
@@ -475,8 +476,8 @@ void MainWindow::on_importWLDButton_clicked() {
     if (filename.isEmpty()) return;
 
     if (currentMap.loadFromWLD(filename)) {
-        // DIBUJAR LOS DATOS CARGADOS - esto falta
-        drawWLDMap();
+        drawWLDMap(true);  // Ajustar vista al cargar nuevo mapa
+        updateSectorList();
 
         QMessageBox::information(this, "Éxito",
                                  QString("Mapa WLD cargado: %1 regiones, %2 paredes")
@@ -564,6 +565,9 @@ void MainWindow::on_sectorList_currentRowChanged(int index) {
         ui->floorHeightSpin->setValue(region.floor_height);
         ui->ceilingHeightSpin->setValue(region.ceiling_height);
         updateTextureThumbnails();
+
+        // Redibujar SIN ajustar vista (mantiene zoom actual)
+        drawWLDMap(false);
     }
 }
 
@@ -834,7 +838,7 @@ void MainWindow::forceSyncSectorList() {
     for (int i = 0; i < currentMap.regions.size(); i++) {
         const ModernRegion &region = currentMap.regions[i];
         ui->sectorList->addItem(QString("Sector %1 (Piso: %2, Techo: %3)")
-                                    .arg(region.active)
+                                    .arg(i)  // <-- Usar índice i
                                     .arg(region.floor_height)
                                     .arg(region.ceiling_height));
     }
@@ -882,32 +886,76 @@ void MainWindow::updateTextureThumbnails() {
     }
 }
 
-void MainWindow::drawWLDMap() {
-    // Limpiar escena
+void MainWindow::drawWLDMap(bool adjustView) {
     scene->clear();
 
-    // Redibujar grid
-    for (int i = 0; i <= 800; i += 50) {
-        scene->addLine(i, 0, i, 800, QPen(Qt::lightGray));
-        scene->addLine(0, i, 800, i, QPen(Qt::lightGray));
-    }
+    // Calcular bounds del mapa real
+    qreal minX = std::numeric_limits<qreal>::max();
+    qreal minY = std::numeric_limits<qreal>::max();
+    qreal maxX = std::numeric_limits<qreal>::min();
+    qreal maxY = std::numeric_limits<qreal>::min();
 
-    // Dibujar regiones (sectores) WLD
-    for (const ModernRegion &region : currentMap.regions) {
-        QPolygonF polygon;
-        for (const ModernPoint &point : region.points) {
-            polygon << QPointF(point.x, point.y);
-        }
-        scene->addPolygon(polygon, QPen(Qt::blue, 2), QBrush(QColor(100, 100, 255, 50)));
-    }
-
-    // Dibujar paredes WLD
     for (const ModernWall &wall : currentMap.walls) {
         if (wall.p1 < currentMap.points.size() && wall.p2 < currentMap.points.size()) {
             const ModernPoint &p1 = currentMap.points[wall.p1];
             const ModernPoint &p2 = currentMap.points[wall.p2];
-            scene->addLine(p1.x, p1.y, p2.x, p2.y, QPen(Qt::red, 3));
+
+            minX = std::min({minX, (qreal)p1.x, (qreal)p2.x});
+            minY = std::min({minY, (qreal)p1.y, (qreal)p2.y});
+            maxX = std::max({maxX, (qreal)p1.x, (qreal)p2.x});
+            maxY = std::max({maxY, (qreal)p1.y, (qreal)p2.y});
         }
+    }
+
+    // Calcular escala y offset
+    qreal mapWidth = maxX - minX;
+    qreal mapHeight = maxY - minY;
+    qreal targetSize = 250;
+    qreal scale = targetSize / std::max(mapWidth, mapHeight);
+
+    qreal centerX = 400;
+    qreal centerY = 400;
+    qreal offsetX = centerX - (minX * scale);
+    qreal offsetY = centerY - (minY * scale);
+
+    // Cuadrícula extendida
+    qreal gridSpacing = 50 * scale;
+    if (gridSpacing < 20) gridSpacing = 20;
+    if (gridSpacing > 100) gridSpacing = 100;
+
+    for (qreal i = 0; i <= 900; i += gridSpacing) {
+        scene->addLine(i, 0, i, 800, QPen(Qt::lightGray, 0.5));
+        scene->addLine(0, i, 900, i, QPen(Qt::lightGray, 0.5));
+    }
+
+    // Dibujar paredes con colores según sector seleccionado
+    for (const ModernWall &wall : currentMap.walls) {
+        if (wall.p1 < currentMap.points.size() && wall.p2 < currentMap.points.size()) {
+            const ModernPoint &p1 = currentMap.points[wall.p1];
+            const ModernPoint &p2 = currentMap.points[wall.p2];
+
+            qreal x1 = (p1.x * scale) + offsetX;
+            qreal y1 = (p1.y * scale) + offsetY;
+            qreal x2 = (p2.x * scale) + offsetX;
+            qreal y2 = (p2.y * scale) + offsetY;
+
+            bool isSelectedSector = (wall.front_region == selectedSectorIndex ||
+                                     wall.back_region == selectedSectorIndex);
+
+            if (isSelectedSector) {
+                scene->addLine(x1, y1, x2, y2, QPen(Qt::green, 3));
+            } else {
+                scene->addLine(x1, y1, x2, y2, QPen(Qt::red, 1));
+            }
+
+            scene->addEllipse(x1-0.5, y1-0.5, 1, 1, QPen(Qt::darkRed, 1), QBrush(Qt::darkRed));
+            scene->addEllipse(x2-0.5, y2-0.5, 1, 1, QPen(Qt::darkRed, 1), QBrush(Qt::darkRed));
+        }
+    }
+
+    // Solo ajustar vista si se solicita explícitamente
+    if (adjustView) {
+        ui->mapView->fitInView(0, 0, 900, 800, Qt::KeepAspectRatio);
     }
 }
 

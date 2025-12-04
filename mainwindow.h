@@ -59,7 +59,7 @@ private:
     void updateScene();
     void drawRegion(const ModernRegion &region);
     void drawWall(const ModernWall &wall);
-    void drawWLDMap();
+    void drawWLDMap(bool adjustView = true);
 
     // Funciones de archivo
     bool loadFPGFile(const QString &filename);
