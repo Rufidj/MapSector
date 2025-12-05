@@ -9,6 +9,7 @@
 #include <memory>
 #include <vector>
 #include <cstdio>
+#include "divmap3d.hpp"
 
 // Estructuras para formato FPG de BennuGD2
 typedef struct {

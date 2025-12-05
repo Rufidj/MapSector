@@ -73,6 +73,7 @@ private:
     bool wallsHaveOppositeOrientation(const ModernWall &w1, const ModernWall &w2);  // <-- Añadir esta línea
     bool isPointInRegion(qreal x, qreal y, const std::vector<QPointF> &polygon);
     void onMouseMoved(QPointF pos);  // <-- Añadir esta línea
+    void updateSelectionColors();
 
     // Funciones de archivo
     bool loadFPGFile(const QString &filename);
@@ -80,7 +81,8 @@ private:
     bool importFromWLD(const QString &filename);
 
     // Funciones auxiliares
-    int findOrCreatePoint(const QPointF &pos);
+    void updateMapCenter();
+    int findOrCreatePoint(int32_t x, int32_t y);
     void updateTextureThumbnails();
     void forceSyncSectorList();
 };
