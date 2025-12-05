@@ -10,7 +10,7 @@ bool ModernMap::saveToWLD(const QString &filename) {
     const char header[8] = {'w', 'l', 'd', 0x1a, 0x0d, 0x0a, 0x01, 0x00};
     fwrite(header, 8, 1, f);
 
-    // Calcular tamaño total
+    // Calcular tamaño total - 548 bytes de paths + datos
     int total = 548 + 4 + points.size() * sizeof(ModernPoint)
                 + 4 + walls.size() * sizeof(ModernWall)
                 + 4 + regions.size() * sizeof(ModernRegion)
@@ -21,12 +21,12 @@ bool ModernMap::saveToWLD(const QString &filename) {
     // Escribir paths (vacíos por ahora)
     char path[256] = {0};
     char name[16] = {0};
-    fwrite(path, 256, 1, f);
-    fwrite(name, 16, 1, f);
+    fwrite(path, 256, 1, f);           // m3d_path
+    fwrite(name, 16, 1, f);            // m3d_name
     int numero = 0;
-    fwrite(&numero, 4, 1, f);
-    fwrite(path, 256, 1, f);
-    fwrite(name, 16, 1, f);
+    fwrite(&numero, 4, 1, f);          // numero
+    fwrite(path, 256, 1, f);           // fpg_path
+    fwrite(name, 16, 1, f);            // fpg_name
 
     // Escribir puntos
     int32_t count = points.size();

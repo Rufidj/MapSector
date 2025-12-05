@@ -62,6 +62,10 @@ MainWindow::MainWindow(QWidget *parent)
             this, &MainWindow::onWallPointAdded);
     connect(editorScene, &EditorScene::wallFinished,
             this, &MainWindow::onWallFinished);
+
+    // Añadir conexión para coordenadas del mouse
+    connect(editorScene, &EditorScene::mouseMoved,
+            this, &MainWindow::onMouseMoved);
 }
 
 void MainWindow::on_addSectorButton_clicked() {
@@ -386,7 +390,7 @@ void MainWindow::onPolygonFinished() {
         return;
     }
 
-    // Crear región moderna con los vértices dibujados
+    // Crear región moderna
     ModernRegion region;
     region.active = 1;
     region.type = 0;
@@ -396,7 +400,32 @@ void MainWindow::onPolygonFinished() {
     region.ceil_tex = 0;
     region.fade = 0;
 
-    // Convertir QPointF a ModernPoint
+    // Convertir vértices y añadir a currentMap.points
+    std::vector<int> pointIndices;
+    for (const QPointF &vertex : currentPolygon) {
+        int pointIndex = findOrCreatePoint(vertex);
+        pointIndices.push_back(pointIndex);
+    }
+
+    // Crear paredes para el sector
+    int sectorIndex = currentMap.regions.size();
+    for (size_t i = 0; i < pointIndices.size(); i++) {
+        ModernWall wall;
+        wall.active = 1;
+        wall.type = 2; // Pared normal
+        wall.p1 = pointIndices[i];
+        wall.p2 = pointIndices[(i + 1) % pointIndices.size()];
+        wall.front_region = sectorIndex;
+        wall.back_region = -1;
+        wall.texture = 0;
+        wall.texture_top = 0;
+        wall.texture_bot = 0;
+        wall.fade = 0;
+
+        currentMap.walls.push_back(wall);
+    }
+
+    // Guardar vértices también en region.points para compatibilidad
     for (const QPointF &vertex : currentPolygon) {
         region.points.push_back(ModernPoint(static_cast<int32_t>(vertex.x()),
                                             static_cast<int32_t>(vertex.y())));
@@ -404,7 +433,7 @@ void MainWindow::onPolygonFinished() {
 
     currentMap.regions.push_back(region);
 
-    // Eliminar SOLO elementos marcados como temporales
+    // Limpiar elementos temporales y dibujar
     QList<QGraphicsItem*> items = scene->items();
     for (QGraphicsItem* item : items) {
         if (item->data(0).toString() == "temporary") {
@@ -413,15 +442,36 @@ void MainWindow::onPolygonFinished() {
         }
     }
 
-    // Dibujar la región final
     drawRegion(region);
-
     updateSectorList();
     currentPolygon.clear();
 
     QMessageBox::information(this, "Éxito",
                              QString("Sector creado con %1 vértices")
                                  .arg(region.points.size()));
+}
+
+void MainWindow::onMouseMoved(QPointF pos) {
+    if (currentMap.points.empty() || currentMap.walls.empty()) {
+        ui->coordXValue->setText("????");
+        ui->coordYValue->setText("????");
+        return;
+    }
+
+    // Usar la fórmula exacta de divmap3d (líneas 1910-1911)
+    qreal mapX = pos.x() / zoom_level + scroll_x;
+    qreal mapY = pos.y() / zoom_level + scroll_y;
+
+    // Aplicar límites de FIN_GRID como en divmap3d
+    const int FIN_GRID = 32768 - 2560; // 30208
+
+    if (mapX < 0) mapX = 0;
+    if (mapY < 0) mapY = 0;
+    if (mapX > FIN_GRID) mapX = FIN_GRID;
+    if (mapY > FIN_GRID) mapY = FIN_GRID;
+
+    ui->coordXValue->setText(QString("%1").arg((int)mapX, 4, 10, QChar('0')));
+    ui->coordYValue->setText(QString("%1").arg((int)mapY, 4, 10, QChar('0')));
 }
 
 void MainWindow::drawRegion(const ModernRegion &region) {
@@ -566,8 +616,14 @@ void MainWindow::on_sectorList_currentRowChanged(int index) {
         ui->ceilingHeightSpin->setValue(region.ceiling_height);
         updateTextureThumbnails();
 
-        // Redibujar SIN ajustar vista (mantiene zoom actual)
-        drawWLDMap(false);
+        // Usar el sistema de dibujo correcto según el tipo de mapa
+        if (currentMap.walls.empty()) {
+            // Mapa nuevo creado en editor - usar updateScene()
+            updateScene();
+        } else {
+            // Mapa WLD cargado - usar drawWLDMap()
+            drawWLDMap(false);
+        }
     }
 }
 
@@ -578,30 +634,104 @@ void MainWindow::on_editVerticesButton_clicked() {
         return;
     }
 
-    // Limpiar escena y redibujar solo el sector seleccionado
+    // Limpiar escena
     scene->clear();
 
-    ModernRegion &region = currentMap.regions[index];
+    // Calcular escala y offset (igual que drawWLDMap)
+    qreal minX = std::numeric_limits<qreal>::max();
+    qreal minY = std::numeric_limits<qreal>::max();
+    qreal maxX = std::numeric_limits<qreal>::min();
+    qreal maxY = std::numeric_limits<qreal>::min();
 
-    // Dibujar polígono del sector
-    QPolygonF polygon;
-    for (const ModernPoint &point : region.points) {
-        polygon << QPointF(point.x, point.y);
+    for (const ModernWall &wall : currentMap.walls) {
+        if (wall.p1 < currentMap.points.size() && wall.p2 < currentMap.points.size()) {
+            const ModernPoint &p1 = currentMap.points[wall.p1];
+            const ModernPoint &p2 = currentMap.points[wall.p2];
+
+            minX = std::min({minX, (qreal)p1.x, (qreal)p2.x});
+            minY = std::min({minY, (qreal)p1.y, (qreal)p2.y});
+            maxX = std::max({maxX, (qreal)p1.x, (qreal)p2.x});
+            maxY = std::max({maxY, (qreal)p1.y, (qreal)p2.y});
+        }
     }
-    scene->addPolygon(polygon, QPen(Qt::blue, 2), QBrush(QColor(100, 100, 255, 50)));
 
-    // Dibujar vértices como VertexItem editables
-    for (int i = 0; i < region.points.size(); i++) {
-        VertexItem *vertexItem = new VertexItem(index, i);
-        vertexItem->setRect(region.points[i].x - 5, region.points[i].y - 5, 10, 10);
-        vertexItem->setPen(QPen(Qt::red, 2));
-        vertexItem->setBrush(QBrush(Qt::red));
+    qreal mapWidth = maxX - minX;
+    qreal mapHeight = maxY - minY;
+    qreal targetSize = 250;
+    qreal scale = targetSize / std::max(mapWidth, mapHeight);
+    qreal offsetX = 400 - (minX * scale);
+    qreal offsetY = 400 - (minY * scale);
 
-        scene->addItem(vertexItem);
+    // Cuadrícula
+    qreal gridSpacing = 50 * scale;
+    if (gridSpacing < 20) gridSpacing = 20;
+    if (gridSpacing > 100) gridSpacing = 100;
 
-        // Conectar señal para actualizar datos
-        connect(vertexItem, &VertexItem::vertexMoved,
-                this, &MainWindow::onVertexMoved);
+    for (qreal i = 0; i <= 900; i += gridSpacing) {
+        scene->addLine(i, 0, i, 800, QPen(Qt::lightGray, 0.5));
+        scene->addLine(0, i, 900, i, QPen(Qt::lightGray, 0.5));
+    }
+
+    // Dibujar todas las paredes con transparencia (guía visual)
+    for (const ModernWall &wall : currentMap.walls) {
+        if (wall.p1 < currentMap.points.size() && wall.p2 < currentMap.points.size()) {
+            const ModernPoint &p1 = currentMap.points[wall.p1];
+            const ModernPoint &p2 = currentMap.points[wall.p2];
+
+            qreal x1 = (p1.x * scale) + offsetX;
+            qreal y1 = (p1.y * scale) + offsetY;
+            qreal x2 = (p2.x * scale) + offsetX;
+            qreal y2 = (p2.y * scale) + offsetY;
+
+            bool isSelectedSector = (wall.front_region == index || wall.back_region == index);
+
+            if (isSelectedSector) {
+                scene->addLine(x1, y1, x2, y2, QPen(Qt::green, 1));
+            } else {
+                scene->addLine(x1, y1, x2, y2, QPen(Qt::red, 1));
+            }
+
+            // Vértices pequeños como guía
+            scene->addEllipse(x1-0.5, y1-0.5, 1, 1, QPen(QColor(139, 0, 0, 100), 1), QBrush(QColor(139, 0, 0, 100)));
+            scene->addEllipse(x2-0.5, y2-0.5, 1, 1, QPen(QColor(139, 0, 0, 100), 1), QBrush(QColor(139, 0, 0, 100)));
+        }
+    }
+
+    // Recolectar vértices del sector seleccionado
+    std::set<int> sectorVertices;
+    for (const ModernWall &wall : currentMap.walls) {
+        if (wall.front_region == index || wall.back_region == index) {
+            sectorVertices.insert(wall.p1);
+            sectorVertices.insert(wall.p2);
+        }
+    }
+
+    // Dibujar polígono del sector seleccionado
+    QPolygonF polygon;
+    for (int vertexIdx : sectorVertices) {
+        if (vertexIdx < currentMap.points.size()) {
+            qreal x = (currentMap.points[vertexIdx].x * scale) + offsetX;
+            qreal y = (currentMap.points[vertexIdx].y * scale) + offsetY;
+            polygon << QPointF(x, y);
+        }
+    }
+    scene->addPolygon(polygon, QPen(Qt::blue, 2), QBrush(QColor(100, 100, 255, 100)));
+
+    // Dibujar vértices editables del sector seleccionado
+    for (int vertexIdx : sectorVertices) {
+        if (vertexIdx < currentMap.points.size()) {
+            qreal x = (currentMap.points[vertexIdx].x * scale) + offsetX;
+            qreal y = (currentMap.points[vertexIdx].y * scale) + offsetY;
+
+            VertexItem *vertexItem = new VertexItem(index, vertexIdx);
+            vertexItem->setRect(x - 0.5, y - 0.5, 1, 1);
+            vertexItem->setPen(QPen(Qt::red, 2));
+            vertexItem->setBrush(QBrush(Qt::red));
+
+            scene->addItem(vertexItem);
+            connect(vertexItem, &VertexItem::vertexMoved,
+                    this, &MainWindow::onVertexMoved);
+        }
     }
 }
 
@@ -655,35 +785,86 @@ void MainWindow::onSectorMoved(int sectorIndex, QPointF delta) {
 
 void MainWindow::onVertexMoved(int sectorIndex, int vertexIndex, QPointF newPosition) {
     if (sectorIndex >= 0 && sectorIndex < currentMap.regions.size()) {
-        if (vertexIndex >= 0 && vertexIndex < currentMap.regions[sectorIndex].points.size()) {
-            // Actualizar el vértice en la colección principal
-            currentMap.regions[sectorIndex].points[vertexIndex].x = newPosition.x();
-            currentMap.regions[sectorIndex].points[vertexIndex].y = newPosition.y();
+        // Calcular escala y offset (igual que en drawWLDMap)
+        qreal minX = std::numeric_limits<qreal>::max();
+        qreal minY = std::numeric_limits<qreal>::max();
+        qreal maxX = std::numeric_limits<qreal>::min();
+        qreal maxY = std::numeric_limits<qreal>::min();
 
-            // Redibujar el sector con la nueva geometría
-            scene->clear();
+        for (const ModernWall &wall : currentMap.walls) {
+            if (wall.p1 < currentMap.points.size() && wall.p2 < currentMap.points.size()) {
+                const ModernPoint &p1 = currentMap.points[wall.p1];
+                const ModernPoint &p2 = currentMap.points[wall.p2];
 
-            // Redibujar polígono actualizado
-            QPolygonF polygon;
-            for (const ModernPoint &point : currentMap.regions[sectorIndex].points) {
-                polygon << QPointF(point.x, point.y);
+                minX = std::min({minX, (qreal)p1.x, (qreal)p2.x});
+                minY = std::min({minY, (qreal)p1.y, (qreal)p2.y});
+                maxX = std::max({maxX, (qreal)p1.x, (qreal)p2.x});
+                maxY = std::max({maxY, (qreal)p1.y, (qreal)p2.y});
             }
-            scene->addPolygon(polygon, QPen(Qt::blue, 2), QBrush(QColor(100, 100, 255, 50)));
+        }
 
-            // Redibujar todos los vértices
-            for (int i = 0; i < currentMap.regions[sectorIndex].points.size(); i++) {
-                VertexItem *vertexItem = new VertexItem(sectorIndex, i);
-                vertexItem->setRect(currentMap.regions[sectorIndex].points[i].x - 5,
-                                    currentMap.regions[sectorIndex].points[i].y - 5, 10, 10);
-                vertexItem->setPen(QPen(Qt::red, 2));
-                vertexItem->setBrush(QBrush(Qt::red));
+        qreal mapWidth = maxX - minX;
+        qreal mapHeight = maxY - minY;
+        qreal targetSize = 250;
+        qreal scale = targetSize / std::max(mapWidth, mapHeight);
+        qreal offsetX = 400 - (minX * scale);
+        qreal offsetY = 400 - (minY * scale);
 
-                scene->addItem(vertexItem);
-                connect(vertexItem, &VertexItem::vertexMoved,
-                        this, &MainWindow::onVertexMoved);
+        // Convertir coordenadas de escena a coordenadas del mapa
+        qreal mapX = (newPosition.x() - offsetX) / scale;
+        qreal mapY = (newPosition.y() - offsetY) / scale;
+
+        // Actualizar en currentMap.points
+        if (vertexIndex >= 0 && vertexIndex < currentMap.points.size()) {
+            currentMap.points[vertexIndex].x = mapX;
+            currentMap.points[vertexIndex].y = mapY;
+        }
+
+        // Redibujar todo el mapa para mantener consistencia
+        drawWLDMap(false);
+        updateSectorList();
+    }
+}
+void MainWindow::redrawVerticesOnly() {
+    // Obtener todos los VertexItem en la escena
+    QList<QGraphicsItem*> items = scene->items();
+
+    for (QGraphicsItem* item : items) {
+        VertexItem* vertex = qgraphicsitem_cast<VertexItem*>(item);
+        if (vertex) {
+            int vertexIdx = vertex->getVertexIndex();
+            if (vertexIdx < currentMap.points.size()) {
+                // Usar la misma lógica de escala que on_editVerticesButton_clicked
+                qreal minX = std::numeric_limits<qreal>::max();
+                qreal minY = std::numeric_limits<qreal>::max();
+                qreal maxX = std::numeric_limits<qreal>::min();
+                qreal maxY = std::numeric_limits<qreal>::min();
+
+                for (const ModernWall &wall : currentMap.walls) {
+                    if (wall.p1 < currentMap.points.size() && wall.p2 < currentMap.points.size()) {
+                        const ModernPoint &p1 = currentMap.points[wall.p1];
+                        const ModernPoint &p2 = currentMap.points[wall.p2];
+
+                        minX = std::min({minX, (qreal)p1.x, (qreal)p2.x});
+                        minY = std::min({minY, (qreal)p1.y, (qreal)p2.y});
+                        maxX = std::max({maxX, (qreal)p1.x, (qreal)p2.x});
+                        maxY = std::max({maxY, (qreal)p1.y, (qreal)p2.y});
+                    }
+                }
+
+                qreal mapWidth = maxX - minX;
+                qreal mapHeight = maxY - minY;
+                qreal targetSize = 250;
+                qreal scale = targetSize / std::max(mapWidth, mapHeight);
+                qreal offsetX = 400 - (minX * scale);
+                qreal offsetY = 400 - (minY * scale);
+
+                qreal x = (currentMap.points[vertexIdx].x * scale) + offsetX;
+                qreal y = (currentMap.points[vertexIdx].y * scale) + offsetY;
+
+                vertex->setPos(x, y);
+                vertex->setRect(x - 0.5, y - 0.5, 1, 1);
             }
-
-            updateSectorList();
         }
     }
 }
@@ -889,6 +1070,21 @@ void MainWindow::updateTextureThumbnails() {
 void MainWindow::drawWLDMap(bool adjustView) {
     scene->clear();
 
+    // Si no hay mapa, inicializar valores por defecto como divmap3d
+    if (currentMap.walls.empty()) {
+        zoom_level = 0.0625;  // Valor inicial como en divmap3d
+        scroll_x = 16384;     // FIN_GRID/2 = 30208/2 ≈ 15104
+        scroll_y = 16384;     // FIN_GRID/2 = 30208/2 ≈ 15104
+        scale = 1.0;
+
+        // Dibujar solo grid
+        for (int i = 0; i <= 800; i += 50) {
+            scene->addLine(i, 0, i, 800, QPen(Qt::lightGray));
+            scene->addLine(0, i, 800, i, QPen(Qt::lightGray));
+        }
+        return;
+    }
+
     // Calcular bounds del mapa real
     qreal minX = std::numeric_limits<qreal>::max();
     qreal minY = std::numeric_limits<qreal>::max();
@@ -911,7 +1107,20 @@ void MainWindow::drawWLDMap(bool adjustView) {
     qreal mapWidth = maxX - minX;
     qreal mapHeight = maxY - minY;
     qreal targetSize = 250;
-    qreal scale = targetSize / std::max(mapWidth, mapHeight);
+    scale = targetSize / std::max(mapWidth, mapHeight);
+
+    // IMPORTANTE: Centrar coordenadas como divmap3d
+    // Calcular centro del mapa y usarlo como scroll
+    scroll_x = (minX + maxX) / 2.0;
+    scroll_y = (minY + maxY) / 2.0;
+    zoom_level = scale;
+
+    // Aplicar límites FIN_GRID como en divmap3d
+    const int FIN_GRID = 32768 - 2560; // 30208
+    if (scroll_x < 0) scroll_x = 0;
+    if (scroll_y < 0) scroll_y = 0;
+    if (scroll_x > FIN_GRID) scroll_x = FIN_GRID;
+    if (scroll_y > FIN_GRID) scroll_y = FIN_GRID;
 
     qreal centerX = 400;
     qreal centerY = 400;
@@ -943,7 +1152,7 @@ void MainWindow::drawWLDMap(bool adjustView) {
                                      wall.back_region == selectedSectorIndex);
 
             if (isSelectedSector) {
-                scene->addLine(x1, y1, x2, y2, QPen(Qt::green, 3));
+                scene->addLine(x1, y1, x2, y2, QPen(Qt::green, 1));
             } else {
                 scene->addLine(x1, y1, x2, y2, QPen(Qt::red, 1));
             }
@@ -953,10 +1162,194 @@ void MainWindow::drawWLDMap(bool adjustView) {
         }
     }
 
+    // Crear polígonos seleccionables para cada sector
+    for (size_t sectorIdx = 0; sectorIdx < currentMap.regions.size(); sectorIdx++) {
+        std::vector<QPointF> sectorPoints;
+
+        for (const ModernWall &wall : currentMap.walls) {
+            if (wall.front_region == sectorIdx) {
+                if (wall.p1 < currentMap.points.size()) {
+                    qreal x1 = (currentMap.points[wall.p1].x * scale) + offsetX;
+                    qreal y1 = (currentMap.points[wall.p1].y * scale) + offsetY;
+                    sectorPoints.push_back(QPointF(x1, y1));
+                }
+                if (wall.p2 < currentMap.points.size()) {
+                    qreal x2 = (currentMap.points[wall.p2].x * scale) + offsetX;
+                    qreal y2 = (currentMap.points[wall.p2].y * scale) + offsetY;
+                    sectorPoints.push_back(QPointF(x2, y2));
+                }
+            }
+        }
+
+        // Crear polígono si hay suficientes puntos
+        if (sectorPoints.size() >= 3) {
+            QPolygonF polygon;
+            for (const QPointF &point : sectorPoints) {
+                polygon << point;
+            }
+
+            // Determinar color según selección
+            bool isSelected = (sectorIdx == selectedSectorIndex);
+            QPen pen(isSelected ? Qt::green : Qt::blue, isSelected ? 3 : 2);
+            QBrush brush(QColor(isSelected ? 100 : 50, isSelected ? 255 : 100, isSelected ? 100 : 255, isSelected ? 120 : 80));
+
+            // Crear item de polígono seleccionable
+            QGraphicsPolygonItem *polygonItem = scene->addPolygon(polygon, pen, brush);
+            polygonItem->setData(0, QVariant((int)sectorIdx));
+            polygonItem->setFlag(QGraphicsItem::ItemIsSelectable, true);
+        }
+    }
+
     // Solo ajustar vista si se solicita explícitamente
     if (adjustView) {
         ui->mapView->fitInView(0, 0, 900, 800, Qt::KeepAspectRatio);
     }
+}
+
+void MainWindow::onSectorClicked(int sectorIndex) {
+    if (sectorIndex >= 0 && sectorIndex < currentMap.regions.size()) {
+        ui->sectorList->setCurrentRow(sectorIndex);
+        selectedSectorIndex = sectorIndex;
+
+        // Actualizar UI con datos del sector
+        const ModernRegion &region = currentMap.regions[sectorIndex];
+        ui->floorHeightSpin->setValue(region.floor_height);
+        ui->ceilingHeightSpin->setValue(region.ceiling_height);
+        updateTextureThumbnails();
+
+        // Redibujar para mostrar selección
+        drawWLDMap(false);
+    }
+}
+
+void MainWindow::assignRegionsAndPortals() {
+    // Ordenar regiones por profundidad primero
+    sortRegionsByDepth();
+
+    // Analizar cada pared para determinar portales
+    for (int i = 0; i < currentMap.walls.size(); i++) {
+        ModernWall &wall = currentMap.walls[i];
+
+        // Inicializar como pared normal
+        wall.back_region = -1;
+        wall.type = 2; // Pared normal
+
+        // Buscar paredes compartidas (portales potenciales)
+        for (int j = i + 1; j < currentMap.walls.size(); j++) {
+            if (wallsShareVertices(wall, currentMap.walls[j])) {
+                if (wallsHaveOppositeOrientation(wall, currentMap.walls[j])) {
+                    // Es un portal - asignar back_region
+                    wall.back_region = currentMap.walls[j].front_region;
+                    wall.type = 1; // Portal
+
+                    // Configurar texturas para portal
+                    wall.texture_top = wall.texture;
+                    wall.texture_bot = wall.texture;
+                    wall.texture = 0; // Sin textura media en portales
+                }
+            }
+        }
+    }
+}
+
+bool MainWindow::wallsShareVertices(const ModernWall &w1, const ModernWall &w2) {
+    return (w1.p1 == w2.p1 && w1.p2 == w2.p2) ||
+           (w1.p1 == w2.p2 && w1.p2 == w2.p1);
+}
+
+bool MainWindow::wallsHaveOppositeOrientation(const ModernWall &w1, const ModernWall &w2) {
+    return w1.front_region != w2.front_region;
+}
+
+void MainWindow::sortRegionsByDepth() {
+    if (currentMap.regions.size() <= 1) {
+        return;
+    }
+
+    // Inicializar todas las regiones con type = 1 (nivel más externo)
+    for (int i = 0; i < currentMap.regions.size(); i++) {
+        currentMap.regions[i].type = 1;
+    }
+
+    // Calcular el número máximo de vértices por región
+    int maxVertex = 0;
+    std::vector<int> regionVertexCount(currentMap.regions.size(), 0);
+
+    for (const ModernWall &wall : currentMap.walls) {
+        if (wall.front_region >= 0 && wall.front_region < currentMap.regions.size()) {
+            regionVertexCount[wall.front_region]++;
+        }
+    }
+
+    for (int count : regionVertexCount) {
+        if (count + 1 > maxVertex) {
+            maxVertex = count + 1;
+        }
+    }
+
+    // Crear polígonos para cada región
+    std::vector<std::vector<QPointF>> regionPolygons(currentMap.regions.size());
+
+    for (int regionIdx = 0; regionIdx < currentMap.regions.size(); regionIdx++) {
+        std::vector<QPointF> vertices;
+
+        for (const ModernWall &wall : currentMap.walls) {
+            if (wall.front_region == regionIdx) {
+                if (wall.p1 < currentMap.points.size()) {
+                    vertices.push_back(QPointF(currentMap.points[wall.p1].x,
+                                               currentMap.points[wall.p1].y));
+                }
+            }
+        }
+
+        regionPolygons[regionIdx] = vertices;
+    }
+
+    // Determinar profundidad de cada región
+    for (int wallIdx = 0; wallIdx < currentMap.walls.size(); wallIdx++) {
+        const ModernWall &wall = currentMap.walls[wallIdx];
+
+        // Calcular punto medio de la pared
+        if (wall.p1 < currentMap.points.size() && wall.p2 < currentMap.points.size()) {
+            qreal midX = (currentMap.points[wall.p1].x + currentMap.points[wall.p2].x) / 2.0;
+            qreal midY = (currentMap.points[wall.p1].y + currentMap.points[wall.p2].y) / 2.0;
+
+            // Determinar en qué regiones está este punto medio
+            int maxDepth = 1;
+            for (int regionIdx = 0; regionIdx < currentMap.regions.size(); regionIdx++) {
+                if (regionIdx != wall.front_region && isPointInRegion(midX, midY, regionPolygons[regionIdx])) {
+                    if (currentMap.regions[regionIdx].type > maxDepth) {
+                        maxDepth = currentMap.regions[regionIdx].type;
+                    }
+                }
+            }
+
+            // Actualizar profundidad de la región frontal
+            if (maxDepth > currentMap.regions[wall.front_region].type) {
+                currentMap.regions[wall.front_region].type = maxDepth;
+            }
+        }
+    }
+}
+
+bool MainWindow::isPointInRegion(qreal x, qreal y, const std::vector<QPointF> &polygon) {
+    if (polygon.size() < 3) return false;
+
+    bool inside = false;
+    int j = polygon.size() - 1;
+
+    for (int i = 0; i < polygon.size(); i++) {
+        const QPointF &pi = polygon[i];
+        const QPointF &pj = polygon[j];
+
+        if (((pi.y() > y) != (pj.y() > y)) &&
+            (x < (pj.x() - pi.x()) * (y - pi.y()) / (pj.y() - pi.y()) + pi.x())) {
+            inside = !inside;
+        }
+        j = i;
+    }
+
+    return inside;
 }
 
 MainWindow::~MainWindow()

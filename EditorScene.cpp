@@ -5,28 +5,36 @@ EditorScene::EditorScene(QObject *parent)
 {
 }
 
-void EditorScene::mousePressEvent(QGraphicsSceneMouseEvent *event)
-{
+void EditorScene::mousePressEvent(QGraphicsSceneMouseEvent *event) {
     if (drawingMode && event->button() == Qt::LeftButton) {
-        // Modo dibujo de sectores
         emit vertexAdded(event->scenePos());
     } else if (event->button() == Qt::RightButton && drawingMode) {
-        // Finalizar polígono con clic derecho
         emit polygonFinished();
         drawingMode = false;
     } else if (wallDrawingMode && event->button() == Qt::LeftButton) {
-        // Modo dibujo de paredes
         emit wallPointAdded(event->scenePos());
         wallPointCount++;
-
-        // Después de 2 puntos, finalizar automáticamente
         if (wallPointCount >= 2) {
             emit wallFinished();
             wallDrawingMode = false;
             wallPointCount = 0;
         }
+    } else if (event->button() == Qt::LeftButton && !drawingMode && !wallDrawingMode) {
+        // Detección de clic en sector
+        QGraphicsItem *item = itemAt(event->scenePos(), QTransform());
+        if (item && item->type() == QGraphicsPolygonItem::Type) {
+            QVariant sectorData = item->data(0);
+            if (sectorData.isValid()) {
+                emit sectorClicked(sectorData.toInt());
+                return; // Importante: no procesar más eventos
+            }
+        }
     }
 
-    // Llamar a la implementación base para mantener funcionalidad normal
     QGraphicsScene::mousePressEvent(event);
+}
+
+void EditorScene::mouseMoveEvent(QGraphicsSceneMouseEvent *event) {
+    emit mouseMoved(event->scenePos());
+    QGraphicsScene::mouseMoveEvent(event);
 }

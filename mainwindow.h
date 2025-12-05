@@ -39,7 +39,8 @@ private slots:
     void on_wallTextureThumb_clicked();
     void on_ceilingTextureThumb_clicked();
     void on_floorTextureThumb_clicked();
-
+    void onSectorClicked(int sectorIndex);  // <-- Añadir esta línea
+    void redrawVerticesOnly();
 private:
     Ui::MainWindow *ui;
     QGraphicsScene *scene;
@@ -51,6 +52,12 @@ private:
     QVector<QPointF> currentWallPoints;
     int selectedSectorIndex = -1;
 
+    // COORDENADAS DEL MAPA
+    qreal scale = 1.0;
+    qreal zoom_level = 0.0625;  // Valor inicial como en divmap3d
+    qreal scroll_x = 0;
+    qreal scroll_y = 0;
+
     // Funciones de conversión y sincronización
     void syncModernMapToUI();
     void syncUIToModernMap();
@@ -60,6 +67,12 @@ private:
     void drawRegion(const ModernRegion &region);
     void drawWall(const ModernWall &wall);
     void drawWLDMap(bool adjustView = true);
+    void assignRegionsAndPortals();
+    void sortRegionsByDepth();                      // <-- Añadir esta línea
+    bool wallsShareVertices(const ModernWall &w1, const ModernWall &w2);  // <-- Añadir esta línea
+    bool wallsHaveOppositeOrientation(const ModernWall &w1, const ModernWall &w2);  // <-- Añadir esta línea
+    bool isPointInRegion(qreal x, qreal y, const std::vector<QPointF> &polygon);
+    void onMouseMoved(QPointF pos);  // <-- Añadir esta línea
 
     // Funciones de archivo
     bool loadFPGFile(const QString &filename);
